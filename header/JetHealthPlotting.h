@@ -18,7 +18,7 @@
 #include "JetHealthHistograms.h"
 
 struct JetHealthPlotConfig : PlotConfig {std::vector<Float_t> etaPhiPtCuts = {50.0, 100.0, 200.0};};
-inline bool PFTypeLogY(Int_t pfType){return pfType == CEF || pfType == NHF || pfType == MUF;}
+inline bool PFTypeLogY(Int_t pfType){return pfType == CHF || pfType == CEF || pfType == NHF || pfType == MUF;}
 
 inline void SaveKinPlot(THnSparseF* hkin, Int_t axis,const TString& axisLabel,const TString& plotName,const BinningStruct& bins,const JetHealthPlotConfig& cfg,const TString& outDir, TFile *outFile = nullptr){
     TCanvas* c = MakeSinglePadCanvas(plotName, cfg, false);
@@ -27,12 +27,17 @@ inline void SaveKinPlot(THnSparseF* hkin, Int_t axis,const TString& axisLabel,co
     const std::size_t nhiBin = bins.hiBins.size();
     std::vector<TH1D*> hists;
     double ymax = 0.0;
-    SetAxisRange(hkin, 0, bins.ptmin, 500);
 
     for(std::size_t hb = nhiBin; hb-- > 0;){
         const auto& hiBin = bins.hiBins.at(hb);
         TString suf = Form("_%s_hb%zu", plotName.Data(), hb);
-        TH1D* h = ProjectTHn1D(hkin, axis, {{3, hiBin.lo, hiBin.hi}}, suf);
+        
+        // Build cuts: Always cut on hiBin (Axis 3 for hkin)
+        std::vector<SparseRange> cuts = {{3, hiBin.lo, hiBin.hi}};
+        // If we are projecting Eta or Phi, we must enforce the pT cut (Axis 0)
+        if (axis != 0) { cuts.push_back({0, bins.ptmin, 500.0}); }
+
+        TH1D* h = ProjectTHn1D(hkin, axis, cuts, suf);
         StyleTH1(h, hiBin.color);
         NormalizeTH1(h);
         ymax = std::max(ymax, (double)h->GetMaximum());
@@ -80,13 +85,22 @@ inline void SavePFPlot(THnSparseF* hpf, Int_t pfType, const BinningStruct& bins,
 
         const std::size_t nhiBin = bins.hiBins.size();
         std::vector<TH1D*> hists;
-        SetAxisRange(hpf, 0, bins.ptmin, 500);
-
         double ymax = 0.0;
+
         for(std::size_t hb = nhiBin; hb-- > 0;){
             const auto& hiBin = bins.hiBins.at(hb);
             TString suf = Form("_%s_hb%zu", plotName.Data(), hb);
-            TH1D* h = ProjectTHn1D(hpf, 0, {{1, (double)pfType, pfType + 1.0}, {2, etaBin.lo, etaBin.hi}, {3, hiBin.lo, hiBin.hi}}, suf);
+            
+            // Build cuts with corrected axes for hpf: 
+            // pfType (1), eta (2), pT (4), hiBin (5)
+            std::vector<SparseRange> cuts = {
+                {1, (double)pfType, pfType + 1.0},
+                {2, etaBin.lo, etaBin.hi},
+                {4, bins.ptmin, 500.0},
+                {5, hiBin.lo, hiBin.hi}
+            };
+
+            TH1D* h = ProjectTHn1D(hpf, 0, cuts, suf);
             StyleTH1(h, hiBin.color);
             NormalizeTH1(h);
             ymax = std::max(ymax, (double)h->GetMaximum());
@@ -127,7 +141,6 @@ inline void SavePFPlot(THnSparseF* hpf, Int_t pfType, const BinningStruct& bins,
         delete c;
     }
 }
-
 inline void SaveEtaPhiPlot(THnSparseF* hkin, Float_t ptCut, std::size_t hiBinIndex, const BinningStruct& bins, const JetHealthPlotConfig& cfg, const TString& outDir, TFile *outFile = nullptr){
     const auto& hiBin = bins.hiBins.at(hiBinIndex);
     TString plotName = Form("hetaphi_pt%.0f%s", ptCut, hiBin.shortName.Data());

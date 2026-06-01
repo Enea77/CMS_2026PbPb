@@ -58,9 +58,13 @@ struct JetHealthStruct{
         ppvF = MakeTH1<TH1I>("hppvF", bins.trig);
         pphfF = MakeTH1<TH1I>("hpphfF", bins.trig);
  
-        kin = MakeTHnSparse<THnSparseF> ("hjetkin", "pt:eta:phi:hiBin", {bins.pt, bins.eta, bins.phi, bins.hiBin});
+        kin = MakeTHnSparse<THnSparseF>("hjetkin", "pt:eta:phi:hiBin", {bins.pt, bins.eta, bins.phi, bins.hiBin});
+        
         const AxisBins pfType = {PFTypes, 0., (Float_t)PFTypes, "PF type (CHF/NHF/CEF/NEF/MUF)"};
-        pf  = MakeTHnSparse<THnSparseF> ("hjetpf",  "pfFrac:pfType:abseta:hiBin", {bins.pfFrac, pfType, bins.abseta, bins.hiBin});
+        
+        // UPDATED: Now uses pfFrac:pfType:eta:phi:pt:hiBin
+        pf = MakeTHnSparse<THnSparseF>("hjetpf", "pfFrac:pfType:eta:phi:pt:hiBin", 
+                                      {bins.pfFrac, pfType, bins.eta, bins.phi, bins.pt, bins.hiBin});
     }
 
     void FillKin(const typename JetStruct<MAXNREF>::RecoMomenta& reco, Int_t j, Int_t hiBinVal, Float_t w = 1.0){
@@ -71,8 +75,17 @@ struct JetHealthStruct{
     void FillPF(const typename JetStruct<MAXNREF>::RecoMomenta& reco, Int_t j, Int_t hiBinVal, Float_t w = 1.0){
         const Float_t fracs[PFTypes] = {reco.pf.CHF[j], reco.pf.NHF[j], reco.pf.CEF[j], reco.pf.NEF[j], reco.pf.MUF[j]};
         for (Int_t p = 0; p < PFTypes; p++) {
-            Double_t x[] = {fracs[p], p + 0.5, TMath::Abs(reco.eta[j]), (Double_t)hiBinVal};
+            // Axes order: 0:pfFrac, 1:pfType, 2:eta, 3:phi, 4:pt, 5:hiBin
+            Double_t x[] = {
+                (Double_t)fracs[p], 
+                (Double_t)(p + 0.5), 
+                (Double_t)reco.eta[j], 
+                (Double_t)reco.phi[j], 
+                (Double_t)reco.pt[j], 
+                (Double_t)hiBinVal
+            };
             pf->Fill(x, w);
+
         }
     }
 

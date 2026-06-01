@@ -23,7 +23,7 @@ int main(int argc, char* argv[]){
     return 0;
 }
 
-void PlotJetHealth(const TString& input){plot(input);}
+void PlotJetHealth(const TString& input= "output_JetHealth_404350.root"){plot(input);}
 
 void plot(const TString& input, const TString& output = ""){
     // gROOT->SetBatch(true);

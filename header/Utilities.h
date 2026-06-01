@@ -55,23 +55,27 @@ struct SparseRange{
 };
 
 inline void SetAxisRange(THnSparse* h, Int_t axis, Double_t lo, Double_t hi){h->GetAxis(axis)->SetRangeUser(lo, hi);}
-inline void ResetAxisRange(THnSparse* h, Int_t axis){h->GetAxis(axis)->SetRange(0, 0);}
+inline void ResetAxisRange(THnSparse* h, Int_t axis){h->GetAxis(axis)->SetRange(0, -1);}
 
-inline TH1D* ProjectTHn1D(THnSparse* h, Int_t projAxis, const std::vector<SparseRange>& ranges = {}, const TString& suffix = ""){
-    for(const auto& r : ranges){SetAxisRange(h, r.axis, r.lo, r.hi);}
-    TH1D* out = h->Projection(projAxis);
-    out->SetName(out->GetName() + suffix);
+// 1D Projection
+inline TH1D* ProjectTHn1D(THnSparse* h, Int_t axis, const std::vector<SparseRange>& ranges, const TString& newName) {
+    for (const auto& r : ranges) { h->GetAxis(r.axis)->SetRangeUser(r.lo, r.hi - 0.0001); }
+    TH1D* tmp = h->Projection(axis, "E"); 
+    TH1D* out = (TH1D*)tmp->Clone(newName);
     out->SetTitle("");
-    for(const auto& r : ranges){ResetAxisRange(h, r.axis);}
+    delete tmp; 
+    for (const auto& r : ranges) { h->GetAxis(r.axis)->SetRange(0, -1); }
     return out;
 }
 
-inline TH2D* ProjectTHn2D(THnSparse* h, Int_t xAxis, Int_t yAxis, const std::vector<SparseRange>& ranges = {}, const TString& suffix = ""){
-    for(const auto& r : ranges){SetAxisRange(h, r.axis, r.lo, r.hi);}
-    TH2D* out = h->Projection(yAxis, xAxis);
-    out->SetName(out->GetName() + suffix);
+// 2D Projection
+inline TH2D* ProjectTHn2D(THnSparse* h, Int_t xAxis, Int_t yAxis, const std::vector<SparseRange>& ranges, const TString& newName) {
+    for (const auto& r : ranges) { h->GetAxis(r.axis)->SetRangeUser(r.lo, r.hi - 0.0001); }
+    TH2D* tmp = h->Projection(yAxis, xAxis, "E"); 
+    TH2D* out = (TH2D*)tmp->Clone(newName);
     out->SetTitle("");
-    for(const auto& r : ranges){ResetAxisRange(h, r.axis);}
+    delete tmp; 
+    for (const auto& r : ranges) { h->GetAxis(r.axis)->SetRange(0, -1); }
     return out;
 }
 
@@ -92,7 +96,7 @@ inline void NormalizeTH1(TH1* h){
 // Plotting //
 
 struct PlotConfig{
-    TString runNumber = "404337";
+    TString runNumber = "404338";
     TString globalTag = "";
     TString jetAlgo   = "";
     

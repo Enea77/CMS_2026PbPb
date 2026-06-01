@@ -30,7 +30,7 @@ struct BinningStruct{
     AxisBins vz = {40, -20.0, 20.0, "v_{z} (cm)"};
     AxisBins pt = {50, 50.0, 1000.0, "p_{T} (GeV/c)"};
     AxisBins eta = {102, -5.1, 5.1, "#eta"};
-    AxisBins abseta = {51, 0, 5.1, "|#eta|"};
+    AxisBins abseta = {51, 0, 5.1, "|#eta|"}; 
     AxisBins phi = {64, -3.2, 3.2, "#phi (rad)"};
     AxisBins nref = {30, 0, 30, "nref"};
     AxisBins trig = {2, 0, 2, "trigger decision"};
@@ -44,8 +44,8 @@ struct BinningStruct{
         {0, 20, "0% < Centrality < 10%", "_hiBin_0_to_20", KlimtRed},
         {20, 60, "10% < Centrality < 30%", "_hiBin_20_to_60", KlimtYellow},
         {60, 100, "30% < Centrality < 50%", "_hiBin_60_to_100", KlimtGreen},
-        {100, 160, "50% < Centrality < 80%", "_hiBin_100_to_160", KlimtBlue}//,
-        //{160, 200, "80% < Centrality < 100%", "_hiBin_160_to_200", KlimtPurple}
+        {100, 160, "50% < Centrality < 80%", "_hiBin_100_to_160", KlimtBlue},
+        {160, 200, "80% < Centrality < 100%", "_hiBin_160_to_200", KlimtPurple}
     };
 
     // eta

@@ -19,13 +19,13 @@
 // #include "../header/JetTriggers_2025PbPb.h"
 
 // minimum pt of jets to include
-static constexpr Float_t ptcut = 50.0;
+static constexpr Float_t ptcut = 10.0;
 
 // minimum pt of jets to include
 const TString& run_number = "";
 
 // more than number of jets in any event being processed
-static constexpr Int_t maxnref = 150;
+static constexpr Int_t maxnref = 999;
 
 void run(const TString& input_filelist, const TString& output, bool isMC);
 
@@ -44,7 +44,7 @@ int main(int argc, char* argv[]){
     return 0;
 }
 
-void JetHealth_PbPb_lxplus(const TString& input_filelist, const TString& output, bool isMC){run(input_filelist, output, isMC);}
+void JetHealth_PbPb_lxplus(const TString& input_filelist="/afs/cern.ch/user/n/nbarnett/public/HLT/5_22_2026/filelist_2025PbPb_HP2.txt", const TString& output="JetHealth_2025_Data.root", bool isMC=false){run(input_filelist, output, isMC);}
  
 void run(const TString& input_filelist, const TString& output, bool isMC){
 
@@ -53,7 +53,7 @@ void run(const TString& input_filelist, const TString& output, bool isMC){
 
     // ttree names
     const Int_t nTTrees = 4;
-    TString sTTrees[nTTrees] = {"hiEvtAnalyzer/HiTree", "skimanalysis/HltTree", "akCs4PFJetAnalyzer/t", "hltanalysis/HltTree"};
+    TString sTTrees[nTTrees] = {"hiEvtAnalyzer/HiTree", "skimanalysis/HltTree", "akCs4PFJetAnalyzer/t", "hltanalysis/HltTree"}; //akPu4CaloJetAnalyzer/caloJetTree   ak4PFJetAnalyzer/t
 
     // for applying Jet Selections from headers
     JetSelect js;
@@ -165,7 +165,7 @@ void run(const TString& input_filelist, const TString& output, bool isMC){
     cfg.runNumber = run_number;
     // making output file and storing histograms
     TFile *fo = new TFile(output,"recreate");
-    SaveJetHealthPlots(hists, bins, cfg, fo);
+    //SaveJetHealthPlots(hists, bins, cfg, fo);
     hists.Write(fo);
     fo->Close();
 }
