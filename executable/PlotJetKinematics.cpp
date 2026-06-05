@@ -58,13 +58,23 @@ void DrawSlideText(int padNum, bool is2D, const TString& mainTitle, double ptCut
     }
 }
 
-void PlotJetKinematics(TString file1Path = "JetHealth_404350", TString label1="PF Jets", 
-                       TString file2Path = "JetHealth_404350_ak4PF", TString label2="Unsubtracted PF Jets") {
+void PlotJetKinematics(TString file1Path = "JetHealth_404350", TString label1="Run 404350", 
+                            TString file2Path = "JetHealth_404469_RPmany", TString label2="Run 404469") {
 
-    if (true){
+    if (false){
+        file1Path = "JetHealth_2026_MC"; label1="2026 MC";
+        file2Path = "JetHealth_2026_MC_maskFPIX"; label2="2026 MC FPIX-masked";
+    }   
+    else if (false){
         file1Path = "JetHealth_2026_MC"; label1="PF Jets";
         file2Path = "JetHealth_2026MC_ak4PF"; label2="Unsubtracted PF Jets";
     }  
+    
+    //file2Path = "JetHealth_404350_CaloJets_try2"; label2="Calo Jets"; //label2="Run404350 akPu4Calo";
+    
+    //file2Path = "JetHealth_2025_Data_new"; label2="2025 Data";
+      
+    file2Path = "JetHealth_404350_PromptRECO"; label2="Run 404350 Prompt RECO";
 
     gStyle->SetOptStat(0);
     

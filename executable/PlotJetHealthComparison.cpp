@@ -85,21 +85,21 @@ void DrawSlideText(int padNum, bool is2D, const TString& mainTitle, double ptCut
 // MAIN PLOTTING MACRO
 // ==============================================================================
 
-void PlotJetHealthComparison(TString file1Path = "JetHealth_404350", TString label1="PF Jets", 
+void PlotJetHealthComparison(TString file1Path = "JetHealth_404350", TString label1="Run 404350", 
                             TString file2Path = "JetHealth_404350_ak4PF", TString label2="Unsubtracted PF Jets") {
 
     if (false){
         file1Path = "JetHealth_2026_MC"; label1="2026 MC";
         file2Path = "JetHealth_2026_MC_maskFPIX"; label2="2026 MC FPIX-masked";
     }   
-    else if (true){
+    else if (false){
         file1Path = "JetHealth_2026_MC"; label1="PF Jets";
         file2Path = "JetHealth_2026MC_ak4PF"; label2="Unsubtracted PF Jets";
     }  
     else if (false){
         file2Path = "JetHealth_404350_CaloJets_try2"; label2="Calo Jets"; //label2="Run404350 akPu4Calo";
     }    
-    else if (false){
+    else if (true){
         file2Path = "JetHealth_2025_Data_new"; label2="2025 Data";
     }                   
     gStyle->SetOptStat(0);
@@ -137,28 +137,42 @@ void PlotJetHealthComparison(TString file1Path = "JetHealth_404350", TString lab
     // CANVAS 2: 2D ETA-PHI MAPS
     // ==============================================================================
     for (double ptC : ptCutsMap) {
-        for (const auto& hb : bins.hiBins) { 
-            TString cName = Form("cMap_pt%.0f_hb%.0f_%.0f", ptC, hb.lo, hb.hi);
-            TCanvas* cMap = new TCanvas(cName, "Eta-Phi Map", 1600, 800); cMap->Divide(2, 1);
-            
-            cMap->cd(1); FormatSlidePad(false, false, true);
-            TH2D* h1 = ProjectTHn2D(hnKin1, 1, 2, {{0, ptC, 1000.0}, {3, (double)hb.lo, (double)hb.hi}}, "map1");
-            //h1->Scale(1.0 / nEvt1); 
-            h1->SetTitle(";#eta;#phi (rad)");
-            h1->GetXaxis()->SetRangeUser(-2.4999,2.4999);
-            h1->GetXaxis()->SetTitleOffset(0.85); h1->GetYaxis()->SetTitleOffset(0.85); h1->Draw("colz");
-            DrawSlideText(1, true, label1, ptC, "Run 404350");
-            
-            cMap->cd(2); FormatSlidePad(false, false, true);
-            TH2D* h2 = ProjectTHn2D(hnKin2, 1, 2, {{0, ptC, 1000.0}, {3, (double)hb.lo, (double)hb.hi}}, "map2");
-            //h2->Scale(1.0 / nEvt2); 
-            h2->SetTitle(";#eta;#phi (rad)");
-            h2->GetXaxis()->SetRangeUser(-2.4999,2.4999);
-            h2->GetXaxis()->SetTitleOffset(0.85); h2->GetYaxis()->SetTitleOffset(0.85); h2->Draw("colz");
-            DrawSlideText(2, true, label2, ptC, "Run 404350", Form("#bf{MC 2026 hiBin %.0f-%.0f}", hb.lo, hb.hi));
-            
-            cMap->SaveAs(outDir + "/" + cName + ".png");
-            delete h1; delete h2; delete cMap;
+    for (const auto& hb : bins.hiBins) { 
+        TString cName = Form("cMap_pt%.0f_hb%.0f_%.0f", ptC, hb.lo, hb.hi);
+        TCanvas* cMap = new TCanvas(cName, "Eta-Phi Map", 1600, 800); cMap->Divide(2, 1);
+        
+        // 1. Project both histograms first
+        TH2D* h1 = ProjectTHn2D(hnKin1, 1, 2, {{0, ptC, 1000.0}, {3, (double)hb.lo, (double)hb.hi}}, "map1");
+        //h1->Scale(1.0 / nEvt1); 
+
+        TH2D* h2 = ProjectTHn2D(hnKin2, 1, 2, {{0, ptC, 1000.0}, {3, (double)hb.lo, (double)hb.hi}}, "map2");
+        //h2->Scale(1.0 / nEvt2); 
+
+        // =================================================================
+        // OPTION: Match Z-axis scales (Comment out this block to decouple them)
+        double maxZ = std::max(h1->GetMaximum(), h2->GetMaximum());
+        double minZ = std::min(h1->GetMinimum(), h2->GetMinimum());
+        h1->SetMaximum(maxZ); h1->SetMinimum(minZ);
+        h2->SetMaximum(maxZ); h2->SetMinimum(minZ);
+        // =================================================================
+        
+        // 2. Format and Draw Pad 1
+        cMap->cd(1); FormatSlidePad(false, false, true);
+        h1->SetTitle(";#eta;#phi (rad)");
+        h1->GetXaxis()->SetRangeUser(-1.4999,1.4999);
+        h1->GetXaxis()->SetTitleOffset(0.85); h1->GetYaxis()->SetTitleOffset(0.85); h1->Draw("colz");
+        DrawSlideText(1, true, label1, ptC, "Run 404350");
+        
+        // 3. Format and Draw Pad 2
+        cMap->cd(2); FormatSlidePad(false, false, true);
+        h2->SetTitle(";#eta;#phi (rad)");
+        h2->GetXaxis()->SetRangeUser(-1.4999,1.4999);
+        h2->GetXaxis()->SetTitleOffset(0.85); h2->GetYaxis()->SetTitleOffset(0.85); h2->Draw("colz");
+        DrawSlideText(2, true, label2, ptC, "Run 404350", Form("#bf{MC 2026 hiBin %.0f-%.0f}", hb.lo, hb.hi));
+
+        // 4. Save and Clean up
+        cMap->SaveAs(outDir + "/" + cName + ".png");
+        delete h1; delete h2; delete cMap;
         }
     }
 

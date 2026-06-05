@@ -56,10 +56,14 @@ void DrawSlideText(int padNum, bool is2D, const TString& mainTitle, double ptCut
 void PlotJetEtaPhiMaps(TString file1Path = "JetHealth_404350", TString label1="PF Jets", 
                        TString file2Path = "JetHealth_404350_ak4PF", TString label2="Unsubtracted PF Jets") {
 
-    if (true){
+    if (false){
         file1Path = "JetHealth_2026_MC"; label1="PF Jets";
         file2Path = "JetHealth_2026MC_ak4PF"; label2="Unsubtracted PF Jets";
     }  
+
+    if (true){
+        file2Path = "JetHealth_2025_Data_new"; label2="2025 Data";
+    } 
 
     gStyle->SetOptStat(0);
     gStyle->SetPalette(kRedBlue);
@@ -99,7 +103,7 @@ void PlotJetEtaPhiMaps(TString file1Path = "JetHealth_404350", TString label1="P
             TH2D* h1 = ProjectTHn2D(hnKin1, 1, 2, {{0, ptC, 1000.0}, {3, (double)hb.lo, (double)hb.hi}}, n1);
             
             h1->SetTitle(";#eta;#phi (rad)");
-            h1->GetXaxis()->SetRangeUser(-2.4999,2.4999);
+            h1->GetXaxis()->SetRangeUser(-1.4999,1.4999);
             h1->GetXaxis()->SetTitleOffset(0.85); h1->GetYaxis()->SetTitleOffset(0.85); h1->Draw("colz");
             DrawSlideText(1, true, label1, ptC, "Run 404350");
             
@@ -112,7 +116,7 @@ void PlotJetEtaPhiMaps(TString file1Path = "JetHealth_404350", TString label1="P
             TH2D* h2 = ProjectTHn2D(hnKin2, 1, 2, {{0, ptC, 1000.0}, {3, (double)hb.lo, (double)hb.hi}}, n2);
             
             h2->SetTitle(";#eta;#phi (rad)");
-            h2->GetXaxis()->SetRangeUser(-2.4999,2.4999);
+            h2->GetXaxis()->SetRangeUser(-1.4999,1.4999);
             h2->GetXaxis()->SetTitleOffset(0.85); h2->GetYaxis()->SetTitleOffset(0.85); h2->Draw("colz");
             DrawSlideText(2, true, label2, ptC, "Run 404350", Form("#bf{MC 2026 hiBin %.0f-%.0f}", hb.lo, hb.hi));
             

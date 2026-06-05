@@ -53,7 +53,7 @@ void run(const TString& input_filelist, const TString& output, bool isMC){
 
     // ttree names
     const Int_t nTTrees = 4;
-    TString sTTrees[nTTrees] = {"hiEvtAnalyzer/HiTree", "skimanalysis/HltTree", "akCs4PFJetAnalyzer/t", "hltanalysis/HltTree"}; //akPu4CaloJetAnalyzer/caloJetTree   ak4PFJetAnalyzer/t
+    TString sTTrees[nTTrees] = {"hiEvtAnalyzer/HiTree", "skimanalysis/HltTree", "ak4PFJetAnalyzer/t", "hltanalysis/HltTree"}; //akPu4CaloJetAnalyzer/caloJetTree   ak4PFJetAnalyzer/t
 
     // for applying Jet Selections from headers
     JetSelect js;
@@ -108,8 +108,8 @@ void run(const TString& input_filelist, const TString& output, bool isMC){
 
         // getting minbias trigger decision
         ttrees[3]->SetBranchStatus("*",0);
-        ttrees[3]->SetBranchStatus("L1_MinimumBiasHF1_AND_BptxAND",1);
-        ttrees[3]->SetBranchAddress("L1_MinimumBiasHF1_AND_BptxAND", &L1minBias);
+        ttrees[3]->SetBranchStatus("L1_MinimumBiasZDC1n_Th1_OR_MinimumBiasHF1_AND_BptxAND",1); //L1_MinimumBiasHF1_AND_BptxAND
+        ttrees[3]->SetBranchAddress("L1_MinimumBiasZDC1n_Th1_OR_MinimumBiasHF1_AND_BptxAND", &L1minBias); //L1_MinimumBiasZDC1n_Th1_OR_MinimumBiasHF1_AND_BptxAND
 
         // looping over events
         Long64_t nentries = ttrees[0]->GetEntries();
