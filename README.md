@@ -93,16 +93,3 @@ root -l executable/PlotJetHealthEtaPhiRegion.cpp
 root -l executable/PlotJetFractions.cpp
 
 ---
-
-### Step 3: A Quick Look at the Code Details
-
-While your README is now fully written, robust, and matches your codebase perfectly, reviewing your macro logic highlights two small tips you can look into whenever you get a chance:
-
-1. **`PlotJetHealthEtaPhiRegion.cpp` Index Mapping**: In your 2D projection setup:
-   ```cpp
-   TH2D* h1 = ProjectTHn2D(hnKin1, 1, 2, {{0, ptC, 1000.0}, {3, (double)hb.lo, (double)hb.hi}}, ...);
-Based on the axes order defined in your header file ("pt:eta:phi:hiBin" $\rightarrow$ pt=0, eta=1, phi=2, hiBin=3), your code is correctly projecting Axis 2 (phi) onto the Y-axis and Axis 1 (eta) onto the X-axis. However, when printing the slide footer text, the macro has hardcoded "Run 404350" inside both panels:C++DrawSlideText(1, true, label1, ptC, "Run 404350");
-...
-DrawSlideText(2, true, label2, ptC, "Run 404350", ...);
-If label2 corresponds to a different run (like Run 404469), you might want to dynamically pass the run number as an argument to DrawSlideText instead of leaving the string fixed to "Run 404350".2. PlotJetFractions.cpp Vector Boundaries: In your GetPFVectors function, you have a variable named xTitle defined as an argument. However, when invoking your layout style function, the code passes the absolute global string array title instead:C++StyleTH1Slide(h1, hb.color, xTitle);
-This approach is perfect and structurally cleaner because it automatically pulls the correct labels like "Charged Hadron Fraction" directly from your header's PFTypeTitles array.
