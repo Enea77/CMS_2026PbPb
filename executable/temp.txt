@@ -1,0 +1,1554 @@
+#ifndef BINNING_H
+#define BINNING_H
+
+#include "TString.h"
+#include "Rtypes.h"
+
+#include "MyColors.h"
+
+#include <vector>
+
+struct AxisBins{
+    Int_t nBins;
+    Float_t lo;
+    Float_t hi;
+    TString title = "";
+};
+
+struct RangeBin{
+    Float_t lo;
+    Float_t hi;
+    TString title;
+    TString shortName;
+    Color_t color = kBlack;
+};
+
+struct BinningStruct{
+    Float_t ptmin;
+
+    // histogram axes
+    AxisBins vz = {40, -20.0, 20.0, "v_{z} (cm)"};
+    AxisBins pt = {50, 50.0, 1000.0, "p_{T} (GeV/c)"};
+    AxisBins eta = {102, -5.1, 5.1, "#eta"};
+    AxisBins abseta = {51, 0, 5.1, "|#eta|"}; 
+    AxisBins phi = {64, -3.2, 3.2, "#phi (rad)"};
+    AxisBins nref = {30, 0, 30, "nref"};
+    AxisBins trig = {2, 0, 2, "trigger decision"};
+    AxisBins pfFrac = {20, 0.0, 1.0, "Particle FLow energy fraction"};
+    AxisBins pfMult = {50, 0, 50, "Particle Flow candidate multiplicity"};
+    AxisBins hiBin = {200, 0, 200, "hiBin"};
+
+    // centrality
+    std::vector<RangeBin> hiBins = {
+        {0, 200, "Inclusive", "_hiBin_0_to_200", KlimtPink},
+        {0, 20, "0% < Centrality < 10%", "_hiBin_0_to_20", KlimtRed},
+        {20, 60, "10% < Centrality < 30%", "_hiBin_20_to_60", KlimtYellow},
+        {60, 100, "30% < Centrality < 50%", "_hiBin_60_to_100", KlimtGreen},
+        {100, 160, "50% < Centrality < 80%", "_hiBin_100_to_160", KlimtBlue},
+        {160, 200, "80% < Centrality < 100%", "_hiBin_160_to_200", KlimtPurple}
+    };
+
+    // eta
+    std::vector<RangeBin> etaBins = {
+        {0.0, 1.2, "|#eta| < 1.2", "_eta_0p0_to_1p2"},
+        {0.0, 2.4, "|#eta| < 2.4", "_eta_0p0_to_2p4"},
+        {0.0, 5.1, "|#eta| < 5.1", "_eta_0p0_to_5p1"},
+        {2.7, 5.1, "2.7 < |#eta| < 5.1", "_eta_2p7_to_5p1"}
+    };
+
+    BinningStruct(Float_t ptcut = 50.0) : ptmin(ptcut), pt({50, ptcut, 1000.0, "p_{T} (GeV/c)"}){}
+};
+
+#endif
+#ifndef BRANCHMAPPING_H
+#define BRANCHMAPPING_H
+
+#include "TTree.h"
+#include "TString.h"
+
+#include <stdexcept>
+#include <vector>
+#include <utility>
+
+// function to get branch variables from ttree
+void SetBranches(TTree* t, const std::vector<std::pair<TString, void*>>& branches){
+
+    // turning off all branches 
+    t->SetBranchStatus("*",0);
+
+    // looping through branches
+    for(const auto& branch : branches){
+
+        // declaring name of the branch and its address
+        TString sBranchName = branch.first;
+        void* address = branch.second;
+
+        // if any declared branch is not in the ttree then ending the macro and printing an error
+        if(!t->GetBranch(sBranchName)){
+            throw std::runtime_error(Form("ERROR: Branch '%s' not found in TTree '%s'",sBranchName.Data(),t->GetName()));
+        }
+
+        // turning on the branches I want
+        t->SetBranchStatus(sBranchName,1);
+
+        // assigning variables to branches in ttree
+        t->SetBranchAddress(sBranchName, address);
+    }
+}
+
+#endif#ifndef EVENTSTRUCTS_PBPB_H
+#define EVENTSTRUCTS_PBPB_H
+
+#include "TString.h"
+#include "Rtypes.h"
+
+#include <vector>
+#include <utility>
+
+// declaring event stucture
+struct EventStruct{
+
+    // event variables //
+    // weight is 1 for data and is mapped to a branch for MC
+    Float_t w = 1.0f;
+    // vertex position
+    Float_t vz;
+    // centrality proxy
+    Int_t hiBin;
+    // run number
+    UInt_t run;
+    // event number
+    ULong64_t event;
+    // lumisection
+    UInt_t lumi;
+
+    // mapping variables to branches
+    // weight is mapped to a branch iff the file being processed is MC
+    std::vector<std::pair<TString, void*>> BranchMap(bool isMC){
+        std::vector<std::pair<TString, void*>> branches = {
+            {"vz", &vz},
+            {"hiBin", &hiBin}
+        };
+        if(isMC){branches.push_back({"weight", &w});}
+        if(!isMC){
+            branches.insert(branches.end(), {
+                {"run", &run},
+                {"evt", &event},
+                {"lumi", &lumi}
+            });
+        }
+        return branches;
+    }
+};
+
+// declaring event filter stucture
+struct FiltersStruct{
+
+    // variables for event filters
+    Int_t pclustF;
+    Int_t ppvF;
+    Int_t pphfF;
+
+    // mapping variables to branches
+    std::vector<std::pair<TString, void*>> BranchMap(){
+        return{
+            {"pclusterCompatibilityFilter", &pclustF},
+            {"pprimaryVertexFilter", &ppvF},
+            {"pphfCoincFilterPF2Th4", &pphfF}
+        };
+    }
+};
+
+#endif
+#ifndef JETEFFICIENCY_H
+#define JETEFFICIENCY_H
+ 
+#include "TFile.h"
+#include "TH1F.h"
+#include "TGraphAsymmErrors.h"
+#include "TString.h"
+
+#include <vector>
+#include <stdexcept>
+
+#include "Binning.h"
+#include "JetSpectraHistograms.h"
+#include "JetTriggers_2026PbPb_MC.h"
+// #include "JetTriggers_2025PbPb.h"
+
+inline void GetHistograms(TFile* fi, const BinningStruct& bins, JetSpectraStruct& hists){
+
+    auto GetTH1F = [&](const TString& hname) -> TH1F* {
+        TH1F* h = (TH1F*)fi->Get(hname);
+        if(!h){throw std::runtime_error(Form("ERROR: Could not find histogram '%s' in file", hname.Data()));}
+        return h;
+    };
+
+    const std::size_t nEta = bins.etaBins.size();
+    const std::size_t nhiBin = bins.hiBins.size();
+
+    // looping through eta bins
+    for(std::size_t b=0; b<nEta; b++){
+        const auto& etaBin = bins.etaBins[b];
+
+        // looping through hiBins
+        for (std::size_t hb=0; hb<nhiBin; hb++){
+            const auto& hiBin = bins.hiBins[hb];
+            hists.ljtpt[b][hb] = GetTH1F("hjtpt" + etaBin.shortName + hiBin.shortName);
+
+            for (std::size_t t=0; t<nHLT; t++){
+                TString hltShort = GetHLTShortName(sHLTrigs[t]);
+
+                for (int m=0; m<JetSpectraStruct::kNMatchTypes; m++){
+                    auto matchType = static_cast<JetSpectraStruct::MatchType>(m);
+                    hists.hlt_ljtpt[matchType][b][t][hb] = GetTH1F("hjtpt" + JetSpectraStruct::MatchSuffix(matchType) + etaBin.shortName + hltShort + hiBin.shortName);
+                }
+            }
+
+            for (std::size_t t=0; t<nL1T; t++) {
+                TString l1Short = GetL1ShortName(sL1Trigs[t]);
+                hists.l1_ljtpt[b][t][hb] = GetTH1F("hjtpt" + etaBin.shortName + l1Short + hiBin.shortName);
+            }
+        }
+    }
+}
+
+struct JetEfficiencyOutputStruct{
+    
+    enum EfficiencyType{
+        kFull = 0, // HLT+L1seed+minBias/minBias
+        kRelative = 1, // HLT+L1seed+minBias/L1seed+minBias
+        kNEfficiencyTypes = 2
+    };
+
+    static TString EfficiencyName(EfficiencyType effType){
+        if(effType == kFull){return "full";}
+        if(effType == kRelative){return "relative";}
+        return "unknown";
+    }
+
+    // [MatchType][EfficiencyType][Eta][hiBin][HLT]
+    std::vector<std::vector<std::vector<std::vector<std::vector<TGraphAsymmErrors*>>>>> jetEfficiencies;
+
+    JetEfficiencyOutputStruct(const BinningStruct& bins){Init(bins);}
+
+    void Init(const BinningStruct& bins){
+        const std::size_t nEta = bins.etaBins.size();
+        const std::size_t nhiBin = bins.hiBins.size();
+
+        jetEfficiencies.resize(JetSpectraStruct::kNMatchTypes,std::vector<std::vector<std::vector<std::vector<TGraphAsymmErrors*>>>>(kNEfficiencyTypes,std::vector<std::vector<std::vector<TGraphAsymmErrors*>>>(nEta,std::vector<std::vector<TGraphAsymmErrors*>>(nhiBin,std::vector<TGraphAsymmErrors*>(nHLT, nullptr)))));
+    }
+    
+    // generates efficiencies from jet spectra
+    void ComputeEfficiencies(const JetSpectraStruct& hists, const BinningStruct& bins){
+        const std::size_t nEta = bins.etaBins.size();
+        const std::size_t nhiBin = bins.hiBins.size();
+
+        // looping over dR matching type
+        for(int m=0; m<JetSpectraStruct::kNMatchTypes; m++){
+            auto matchType = static_cast<JetSpectraStruct::MatchType>(m);
+
+            // looping over efficiency type
+            for(int e=0; e<kNEfficiencyTypes; e++){
+                auto effType = static_cast<EfficiencyType>(e);
+
+                // looping over eta
+                for(std::size_t b=0; b<nEta; b++){
+
+                    // looping over HLT
+                    for(std::size_t t=0; t<nHLT; t++){
+
+                        // looping over hiBin
+                        for(std::size_t hb=0; hb<nhiBin; hb++){
+                            TH1F* denom = (effType == kFull) ? hists.ljtpt[b][hb] : hists.l1_ljtpt[b][L1SeedHLT[t]][hb];
+                            jetEfficiencies[matchType][effType][b][hb][t] = new TGraphAsymmErrors(hists.hlt_ljtpt[matchType][b][t][hb], denom, "cl=0.683 b(1,1) mode");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void Write(TFile* f){
+        f->cd();
+        WriteAll(jetEfficiencies);
+        f->Close();
+    }
+};
+
+#endif
+#ifndef JETEFFICIENCYPLOTTING_H
+#define JETEFFICIENCYPLOTTING_H
+
+#include "TCanvas.h"
+#include "TDatime.h"
+#include "TGraphAsymmErrors.h"
+#include "TLegend.h"
+#include "TLine.h"
+#include "TString.h"
+#include "TStyle.h"
+#include "TSystem.h"
+ 
+#include <vector>
+#include <array>
+#include <stdexcept>
+#include <iostream>
+ 
+#include "Binning.h"
+#include "JetEfficiency.h"
+#include "JetSpectraHistograms.h"
+#include "JetTriggers_2026PbPb_MC.h"
+// #include "JetTriggers_2025PbPb.h"
+
+struct PlotConfig{
+    TString runNumber = "";
+    TString globalTag = "";
+    TString jetAlgo   = "akCs4PF";
+    float ptmin  = 20.0;
+    float ptmax  = 200.0;
+    float effmax = 1.1;
+    // int canvasSize = 800;
+    int canvasSize = 2400;
+    float imageScaling = 1.0;
+    // float imageScaling = 3.0;
+    float legfrac = 0.2;
+};
+
+struct CanvasStruct {
+    TCanvas* c = nullptr;
+    TPad* plotpad = nullptr;
+    TPad* legpad = nullptr;
+};
+
+inline CanvasStruct MakeCanvas(const TString& name, const PlotConfig& cfg){
+    CanvasStruct cs;
+    cs.c = new TCanvas(name, "", cfg.canvasSize, cfg.canvasSize);
+    cs.c->cd();
+
+    // TPad for legends
+    cs.legpad = new TPad(name + "_legpad", "", 0.0, 1.0 - cfg.legfrac, 1.0, 1.0);
+    cs.legpad->SetTopMargin(0.05);
+    cs.legpad->SetBottomMargin(0.0);
+    cs.legpad->SetLeftMargin(0.0);
+    cs.legpad->SetRightMargin(0.0);
+    cs.legpad->SetFillStyle(0);
+    cs.legpad->Draw();
+
+    // TPad for plot
+    cs.plotpad = new TPad(name + "_plotpad", "", 0.0, 0.0, 1.0, 1.0 - cfg.legfrac);
+    cs.plotpad->SetTopMargin(0.02);
+    cs.plotpad->SetBottomMargin(0.12);
+    cs.plotpad->SetLeftMargin(0.12);
+    cs.plotpad->SetRightMargin(0.05);
+    cs.plotpad->SetGridy();
+    cs.plotpad->SetGridx();
+    cs.plotpad->Draw();
+
+    return cs;
+}
+
+inline TLegend* MakeLegend(float xmin, float ymin, float xmax, float ymax) {
+    TLegend* l = new TLegend(xmin, ymin, xmax, ymax);
+    l->SetBorderSize(0);
+    l->SetFillStyle(0);
+    return l;
+}
+
+inline void DrawRefLine(float xmin, float xmax, float y = 1.0) {
+    TLine* line = new TLine(xmin, y, xmax, y);
+    line->SetLineWidth(1);
+    line->SetLineColor(kBlack);
+    line->SetLineStyle(2);
+    line->Draw("same");
+}
+
+inline void StyleGraph(TGraphAsymmErrors* g, std::size_t triggerIndex) {
+    static const std::array<int, 8> colors = {kBlack, kBlue, kRed, kGreen+2, kMagenta, kOrange+1, kCyan+1, kViolet};
+    if(triggerIndex >= colors.size()){throw std::runtime_error(Form("StyleGraph: trigger index %zu exceeds available colours", triggerIndex));}
+    g->SetMarkerColor(colors[triggerIndex]);
+    g->SetLineColor(colors[triggerIndex]);
+    g->SetMarkerStyle(20);
+    g->SetMarkerSize(1.5);
+    g->SetLineWidth(3);
+}
+
+inline void DrawLegends(TPad* legpad, const std::vector<TGraphAsymmErrors*>& clones, const std::vector<TString>& infoEntries, JetSpectraStruct::MatchType matchType, float legfrac){
+    legpad->cd();
+
+    // trigger legend
+    TLegend* ltrig = MakeLegend(0.02, 0.03, 0.65, 0.97);
+    ltrig->SetNColumns(1);
+    for(std::size_t t=0; t<nHLT; t++){ltrig->AddEntry(clones[t], sHLTrigs[t], "lp");}
+    ltrig->Draw("same");
+
+    // info legend
+    TLegend* linfo = MakeLegend(0.65, 0.03, 0.98, 0.97);
+    for(const auto& entry : infoEntries){linfo->AddEntry((TObject*)0, entry, "");}
+    if(matchType == JetSpectraStruct::kDR){linfo->AddEntry((TObject*)0, "#Delta R < 0.3", "");}
+    linfo->Draw("same");
+}
+
+inline void SaveEfficiencyCanvas(const JetEfficiencyOutputStruct& out, const BinningStruct& bins, JetSpectraStruct::MatchType matchType, JetEfficiencyOutputStruct::EfficiencyType effType, std::size_t etaIndex, std::size_t hiBinIndex, const TString& outDir, const PlotConfig& cfg){
+    const auto& etaBin = bins.etaBins[etaIndex];
+    const auto& hiBin  = bins.hiBins[hiBinIndex];
+
+    TString hname = "heff" + JetSpectraStruct::MatchSuffix(matchType) + "_" + JetEfficiencyOutputStruct::EfficiencyName(effType) + etaBin.shortName + hiBin.shortName;
+
+    CanvasStruct cs = MakeCanvas(hname, cfg);
+
+    std::vector<TGraphAsymmErrors*> clones(nHLT, nullptr);
+    for(std::size_t t=0; t<nHLT; t++){
+        clones[t] = (TGraphAsymmErrors*)out.jetEfficiencies[matchType][effType][etaIndex][hiBinIndex][t]->Clone();
+        StyleGraph(clones[t], t);
+    }
+
+    cs.plotpad->cd();
+    clones[0]->Draw("ap");
+    clones[0]->SetTitle("");
+    clones[0]->GetXaxis()->SetTitle("p_{T,leading jet} (GeV)");
+    clones[0]->GetYaxis()->SetTitle(effType == JetEfficiencyOutputStruct::kFull ? "HLT / MinBias" : "HLT / L1 Seed");
+    clones[0]->GetXaxis()->CenterTitle(true);
+    clones[0]->GetYaxis()->CenterTitle(true);
+    clones[0]->GetXaxis()->SetTitleOffset(1.0);
+    clones[0]->GetYaxis()->SetTitleOffset(1.0);
+    clones[0]->SetMinimum(0.0);
+    clones[0]->SetMaximum(cfg.effmax);
+    clones[0]->GetXaxis()->SetRangeUser(cfg.ptmin, cfg.ptmax);
+
+    for(std::size_t t=1; t<nHLT; t++){clones[t]->Draw("p same");}
+    DrawRefLine(cfg.ptmin, cfg.ptmax);
+    
+    std::vector<TString> infoEntries;
+    if(!cfg.runNumber.IsNull()){infoEntries.push_back(cfg.runNumber);}
+    if(!cfg.globalTag.IsNull()){infoEntries.push_back(cfg.globalTag);}
+    if(!cfg.jetAlgo.IsNull()){infoEntries.push_back(cfg.jetAlgo);}
+    infoEntries.push_back(hiBin.title);
+    infoEntries.push_back(etaBin.title);
+
+    DrawLegends(cs.legpad, clones, infoEntries, matchType, cfg.legfrac);
+
+    cs.c->SaveAs(outDir + "/" + hname + ".png");
+    delete cs.c;
+}
+
+inline void SaveEfficiencyPlots( const JetEfficiencyOutputStruct& out, const BinningStruct& bins, const PlotConfig& cfg){
+    gStyle->SetImageScaling(cfg.imageScaling);
+    gStyle->SetTitleSize(0.04, "XY");
+    gStyle->SetLabelSize(0.04, "XY");
+    gStyle->SetGridColor(kGray+2);
+    gStyle->SetGridWidth(2);
+    gStyle->SetGridStyle(1);
+
+    TDatime now;
+    TString timestamp = Form("%04d-%02d-%02d_%02d-%02d-%02d", now.GetYear(), now.GetMonth(), now.GetDay(), now.GetHour(), now.GetMinute(), now.GetSecond());
+    TString plotsBase = "plots_" + timestamp;
+    gSystem->mkdir(plotsBase, true);
+    std::cout << "saving plots to " << plotsBase << std::endl;
+
+    const std::size_t nEta = bins.etaBins.size();
+    const std::size_t nhiBin = bins.hiBins.size();
+
+    for(int m=0; m<JetSpectraStruct::kNMatchTypes; m++){
+        auto matchType = static_cast<JetSpectraStruct::MatchType>(m);
+
+        for(int e=0; e<JetEfficiencyOutputStruct::kNEfficiencyTypes; e++){
+            auto effType = static_cast<JetEfficiencyOutputStruct::EfficiencyType>(e);
+
+            TString matchStr = JetSpectraStruct::MatchSuffix(matchType).Strip(TString::kLeading, '_');
+            TString effStr = JetEfficiencyOutputStruct::EfficiencyName(effType);
+            TString subDir = matchStr.IsNull() ? effStr : matchStr + "_" + effStr;
+            TString outDir = plotsBase + "/" + subDir;
+            gSystem->mkdir(outDir, true);
+
+            for(std::size_t b=0; b<nEta; b++){
+                for(std::size_t hb=0; hb<nhiBin; hb++){SaveEfficiencyCanvas(out, bins, matchType, effType, b, hb, outDir, cfg);}
+            }
+        }
+    }
+    std::cout<<"all efficiency plots saved to "<<plotsBase<<std::endl;
+}
+
+#endif
+#ifndef JETHEALTHHISTOGRAMS_H
+#define JETHEALTHHISTOGRAMS_H
+
+#include "TH1F.h"
+#include "TH1I.h"
+#include "THnSparse.h"
+#include "TFile.h"
+#include "TMath.h"
+#include "TString.h"
+#include "Rtypes.h"
+
+#include <vector>
+#include <cstddef>
+
+#include "Binning.h"
+#include "Utilities.h"
+
+#include "JetStruct.h"
+
+enum PFType{
+    CHF = 0,
+    NHF = 1,
+    CEF = 2,
+    NEF = 3,
+    MUF = 4,
+    PFTypes = 5
+};
+
+constexpr std::array<const char*, PFTypes> PFTypeNames  = {"CHF", "NHF", "CEF", "NEF", "MUF"};
+constexpr std::array<const char*, PFTypes> PFTypeTitles = {"Charged Hadron Fraction","Neutral Hadron Fraction","Charged EM Fraction","Neutral EM Fraction","Muon Fraction"};
+
+template <Int_t MAXNREF>
+struct JetHealthStruct{
+
+    // event histograms
+    TH1F* vz_unpassed = nullptr;
+    TH1F* vz = nullptr;
+    TH1I* hiBin = nullptr;
+    TH1I* nref = nullptr;
+
+    // event filter histograms
+    TH1I* pclustF = nullptr;
+    TH1I* ppvF = nullptr;
+    TH1I* pphfF = nullptr;
+
+    // kimematics and PF fractions
+    THnSparseF* kin = nullptr;
+    THnSparseF* pf = nullptr;
+
+    JetHealthStruct(const BinningStruct& bins){InitHistograms(bins);}
+    
+    void InitHistograms(const BinningStruct& bins){
+        vz = MakeTH1<TH1F>("hvz", bins.vz);
+        vz_unpassed = MakeTH1<TH1F>("hvz_unpassed", bins.vz);
+        hiBin = MakeTH1<TH1I>("hhiBin", bins.hiBin);
+        nref = MakeTH1<TH1I>("hnref", bins.nref);
+        pclustF = MakeTH1<TH1I>("hpclustF", bins.trig);
+        ppvF = MakeTH1<TH1I>("hppvF", bins.trig);
+        pphfF = MakeTH1<TH1I>("hpphfF", bins.trig);
+ 
+        kin = MakeTHnSparse<THnSparseF>("hjetkin", "pt:eta:phi:hiBin", {bins.pt, bins.eta, bins.phi, bins.hiBin});
+        
+        const AxisBins pfType = {PFTypes, 0., (Float_t)PFTypes, "PF type (CHF/NHF/CEF/NEF/MUF)"};
+        
+        // UPDATED: Now uses pfFrac:pfType:eta:phi:pt:hiBin
+        pf = MakeTHnSparse<THnSparseF>("hjetpf", "pfFrac:pfType:eta:phi:pt:hiBin", 
+                                      {bins.pfFrac, pfType, bins.eta, bins.phi, bins.pt, bins.hiBin});
+    }
+
+    void FillKin(const typename JetStruct<MAXNREF>::RecoMomenta& reco, Int_t j, Int_t hiBinVal, Float_t w = 1.0){
+        Double_t x[] = {reco.pt[j], reco.eta[j], reco.phi[j], (Double_t)hiBinVal};
+        kin->Fill(x, w);
+    }
+
+    void FillPF(const typename JetStruct<MAXNREF>::RecoMomenta& reco, Int_t j, Int_t hiBinVal, Float_t w = 1.0){
+        const Float_t fracs[PFTypes] = {reco.pf.CHF[j], reco.pf.NHF[j], reco.pf.CEF[j], reco.pf.NEF[j], reco.pf.MUF[j]};
+        for (Int_t p = 0; p < PFTypes; p++) {
+            // Axes order: 0:pfFrac, 1:pfType, 2:eta, 3:phi, 4:pt, 5:hiBin
+            Double_t x[] = {
+                (Double_t)fracs[p], 
+                (Double_t)(p + 0.5), 
+                (Double_t)reco.eta[j], 
+                (Double_t)reco.phi[j], 
+                (Double_t)reco.pt[j], 
+                (Double_t)hiBinVal
+            };
+            pf->Fill(x, w);
+
+        }
+    }
+
+    void Write(TFile* f) {
+        f->cd();
+        WriteAll(vz_unpassed);
+        WriteAll(vz);
+        WriteAll(hiBin);
+        WriteAll(nref);
+        WriteAll(pclustF);
+        WriteAll(ppvF);
+        WriteAll(pphfF);
+        if(kin){kin->Write();}
+        if(pf){pf->Write();}
+    }
+
+};
+
+#endif
+#ifndef JETHEALTHPLOTTING_H
+#define JETHEALTHPLOTTING_H
+
+#include "TCanvas.h"
+#include "TDatime.h"
+#include "TH1.h"
+#include "TH2.h"
+#include "TLatex.h"
+#include "TLegend.h"
+#include "TString.h"
+#include "TStyle.h"
+#include "TSystem.h"
+#include "THnSparse.h"
+ 
+#include "Binning.h"
+#include "Utilities.h"
+
+#include "JetHealthHistograms.h"
+
+struct JetHealthPlotConfig : PlotConfig {std::vector<Float_t> etaPhiPtCuts = {50.0, 100.0, 200.0};};
+inline bool PFTypeLogY(Int_t pfType){return pfType == CHF || pfType == CEF || pfType == NHF || pfType == MUF;}
+
+inline void SaveKinPlot(THnSparseF* hkin, Int_t axis,const TString& axisLabel,const TString& plotName,const BinningStruct& bins,const JetHealthPlotConfig& cfg,const TString& outDir, TFile *outFile = nullptr){
+    TCanvas* c = MakeSinglePadCanvas(plotName, cfg, false);
+    TLegend* l = MakeLegend();
+ 
+    const std::size_t nhiBin = bins.hiBins.size();
+    std::vector<TH1D*> hists;
+    double ymax = 0.0;
+
+    for(std::size_t hb = nhiBin; hb-- > 0;){
+        const auto& hiBin = bins.hiBins.at(hb);
+        TString suf = Form("_%s_hb%zu", plotName.Data(), hb);
+        
+        // Build cuts: Always cut on hiBin (Axis 3 for hkin)
+        std::vector<SparseRange> cuts = {{3, hiBin.lo, hiBin.hi}};
+        // If we are projecting Eta or Phi, we must enforce the pT cut (Axis 0)
+        if (axis != 0) { cuts.push_back({0, bins.ptmin, 500.0}); }
+
+        TH1D* h = ProjectTHn1D(hkin, axis, cuts, suf);
+        StyleTH1(h, hiBin.color);
+        NormalizeTH1(h);
+        ymax = std::max(ymax, (double)h->GetMaximum());
+        hists.push_back(h);
+        l->AddEntry(h, hiBin.title, "l");
+    }
+
+    hists.at(0)->GetYaxis()->SetRangeUser(0.0, ymax * 1.35);
+    if(axis==0){
+        hists.at(0)->GetYaxis()->SetRangeUser(1e-6, ymax * 5.0);
+        hists.at(0)->GetXaxis()->SetRangeUser(20, 500);
+        c->SetLogy(true);
+        c->SetLogx(true);
+    }
+    hists.at(0)->GetXaxis()->SetTitle(axisLabel);
+    hists.at(0)->GetXaxis()->CenterTitle(true);
+    hists.at(0)->GetXaxis()->SetTitleOffset(1.3);
+    hists.at(0)->GetYaxis()->SetTitleOffset(1.3);
+
+    for(std::size_t hb = 0; hb < nhiBin; hb++){
+        hists.at(hb)->Draw(hb == 0 ? "ep" : "ep same");
+        if(outFile && !outFile->IsZombie()){
+            outFile->cd();
+            hists.at(hb)->Write();
+        }
+    }
+
+    DrawCMSLabel();
+    DrawLabel(Form(" Run %s",cfg.runNumber.Data()),0.12,0.9, 0.035);
+    DrawJetAlgoLabel(cfg.jetAlgo);
+    DrawLabel(Form("#bf{p_{T} > %.0f GeV/c}", bins.ptmin), 0.4, 0.97, 0.035);
+    
+    l->Draw("same");
+    c->SaveAs(outDir + "/" + plotName + ".png");
+
+    for(auto* h : hists){delete h;}
+    delete c;
+}
+
+inline void SavePFPlot(THnSparseF* hpf, Int_t pfType, const BinningStruct& bins, const JetHealthPlotConfig& cfg, const TString& outDir, TFile *outFile = nullptr){
+    for(const auto& etaBin : bins.etaBins){
+        TString plotName = Form("hpf_%s%s", PFTypeNames.at(pfType), etaBin.shortName.Data());
+        TCanvas* c = MakeSinglePadCanvas(plotName, cfg, true);
+        TLegend* l = MakeLegend();
+
+        const std::size_t nhiBin = bins.hiBins.size();
+        std::vector<TH1D*> hists;
+        double ymax = 0.0;
+
+        for(std::size_t hb = nhiBin; hb-- > 0;){
+            const auto& hiBin = bins.hiBins.at(hb);
+            TString suf = Form("_%s_hb%zu", plotName.Data(), hb);
+            
+            // Build cuts with corrected axes for hpf: 
+            // pfType (1), eta (2), pT (4), hiBin (5)
+            std::vector<SparseRange> cuts = {
+                {1, (double)pfType, pfType + 1.0},
+                {2, etaBin.lo, etaBin.hi},
+                {4, bins.ptmin, 500.0},
+                {5, hiBin.lo, hiBin.hi}
+            };
+
+            TH1D* h = ProjectTHn1D(hpf, 0, cuts, suf);
+            StyleTH1(h, hiBin.color);
+            NormalizeTH1(h);
+            ymax = std::max(ymax, (double)h->GetMaximum());
+            hists.push_back(h);
+            l->AddEntry(h, hiBin.title, "l");
+        }
+
+        hists.at(0)->GetYaxis()->SetRangeUser(0.0, ymax * 1.35);
+        hists.at(0)->GetXaxis()->SetTitle(PFTypeTitles.at(pfType));
+        hists.at(0)->GetXaxis()->CenterTitle(true);
+        hists.at(0)->GetXaxis()->SetTitleOffset(1.3);
+        hists.at(0)->GetYaxis()->SetTitleOffset(1.3);
+        if(PFTypeLogY(pfType)){
+            hists.at(0)->GetYaxis()->SetRangeUser(1e-6, ymax * 5.0);
+            c->SetLogy();
+        } else {
+            hists.back()->GetYaxis()->SetRangeUser(0.0, ymax * 1.35);
+        }
+
+        for(std::size_t hb = 0; hb < nhiBin; hb++){
+            hists.at(hb)->Draw(hb == 0 ? "ep" : "ep same");
+            if(outFile && !outFile->IsZombie()){
+                outFile->cd();
+                hists.at(hb)->Write();
+            }
+        }
+
+        DrawCMSLabel();
+        DrawLabel(Form(" Run %s",cfg.runNumber.Data()),0.12,0.9, 0.035);
+        DrawJetAlgoLabel(cfg.jetAlgo);
+        DrawLabel(Form("#bf{p_{T} > %.0f GeV/c}", bins.ptmin), 0.4, 0.975, 0.035);
+        DrawLabel(Form("#bf{%s}", etaBin.title.Data()), 0.7, 0.965, 0.035);
+
+        l->Draw("same");
+        c->SaveAs(outDir + "/" + plotName + ".png");
+
+        for (auto* h : hists) { delete h; }
+        delete c;
+    }
+}
+inline void SaveEtaPhiPlot(THnSparseF* hkin, Float_t ptCut, std::size_t hiBinIndex, const BinningStruct& bins, const JetHealthPlotConfig& cfg, const TString& outDir, TFile *outFile = nullptr){
+    const auto& hiBin = bins.hiBins.at(hiBinIndex);
+    TString plotName = Form("hetaphi_pt%.0f%s", ptCut, hiBin.shortName.Data());
+    TCanvas* c = MakeColzCanvas(plotName, cfg);
+
+    TH2D* h = ProjectTHn2D(hkin, 1, 2, {{0, ptCut, 1e6}, {3, hiBin.lo, hiBin.hi}},Form("_%s", plotName.Data()));
+
+    h->GetXaxis()->SetTitle("#eta");
+    h->GetYaxis()->SetTitle("#phi (rad)");
+    h->GetXaxis()->CenterTitle(true);
+    h->GetYaxis()->CenterTitle(true);
+    h->GetXaxis()->SetTitleOffset(1.3);
+    h->GetYaxis()->SetTitleOffset(1.3);
+    // h->GetZaxis()->SetLabelSize(0);
+    gStyle->SetPalette(kRedBlue);
+    h->Draw("colz");
+
+    DrawCMSLabel(0.12,0.93,0.035);
+    DrawLabel(Form("Run %s",cfg.runNumber.Data()),0.12,0.97, 0.035);
+    DrawJetAlgoLabel(cfg.jetAlgo, 0.75, 0.04, 0.035);
+    DrawLabel(Form("#bf{p_{T} > %.0f GeV/c}", ptCut), 0.12, 0.04, 0.035);
+    DrawLabel(Form("#bf{%s}", bins.hiBins.at(hiBinIndex).title.Data()), 0.5, 0.93, 0.035);
+
+    c->SaveAs(outDir + "/" + plotName + ".png");
+    if(outFile && !outFile->IsZombie()){
+        outFile->cd();
+        h->Write();
+    }
+
+    delete h;
+    delete c;
+}
+
+template <Int_t MAXNREF>
+inline void SaveJetHealthPlots(const JetHealthStruct<MAXNREF>& hists, const BinningStruct& bins, const JetHealthPlotConfig& cfg, TFile *outFile = nullptr){
+    SetPlotStyle(cfg);
+    Float_t PFptcut = 50.0;
+    if(!outFile || outFile->IsZombie()){std::cout << "No output file specified or specified file is a zombie"<< std::endl;}
+
+    TString plotsBase = MakePlotDir("jethealth_plots_run"+cfg.runNumber);
+    std::cout << "saving jet health plots to " << plotsBase << std::endl;
+
+    TString kinDir = plotsBase + "/kinematics";
+    TString pfDir = plotsBase + "/pf_fractions";
+    TString etaPhiDir = plotsBase + "/eta_phi_maps";
+    gSystem->mkdir(kinDir, true);
+    gSystem->mkdir(pfDir, true);
+    gSystem->mkdir(etaPhiDir, true);
+
+    // 1D kinematic plots
+    SaveKinPlot(hists.kin, 0, "p_{T} (GeV/c)", "hkin_pt", bins, cfg, kinDir, outFile);
+    SaveKinPlot(hists.kin, 1, "#eta", "hkin_eta", bins, cfg, kinDir, outFile);
+    SaveKinPlot(hists.kin, 2, "#phi (rad)", "hkin_phi", bins, cfg, kinDir, outFile);
+
+    // PF fraction plots
+    for(Int_t p=0; p<PFTypes; p++){SavePFPlot(hists.pf, p, bins, cfg, pfDir, outFile);}
+
+    // eta-phi 2D plots
+    const std::size_t nhiBin = bins.hiBins.size();
+    for (Float_t ptCut : cfg.etaPhiPtCuts) {
+        for(std::size_t hb = nhiBin; hb-- > 0;){SaveEtaPhiPlot(hists.kin, ptCut, hb, bins, cfg, etaPhiDir, outFile);}
+    }
+
+    std::cout << "all jet health plots saved to " << plotsBase << std::endl;
+}
+
+#endif
+#ifndef JETSELECTION_PBPB_H
+#define JETSELECTION_PBPB_H
+
+#include "TMath.h"
+#include "TH2.h"
+#include "TFile.h"
+#include <string>
+
+class JetSelect{
+private:
+    void loadVetoMap(const std::string VetoMapPath) {
+        TFile *fvm = TFile::Open(VetoMapPath.c_str(),"read");
+        if(!fvm){throw std::runtime_error("Error: Could not open Jet Veto Map file: " + VetoMapPath);}
+        TH2D *hvetomap = (TH2D*)fvm->Get("jetvetomap_all");
+        if(!hvetomap){throw std::runtime_error("Error: Veto Map histogram 'jetvetomap_all' not in file");}
+        hvetomap_ = (TH2D*)hvetomap->Clone("hvetomap_");
+        hvetomap_->SetDirectory(0);
+        fvm->Close();
+
+        // showing that the veto map was obtained
+        std::cout << "\033[1;32mLoaded Jet Veto Map from: " << VetoMapPath << "\033[0m" << std::endl;
+    }
+    TH2D* hvetomap_;
+public:
+
+    /// Default → file standard on EOS
+    JetSelect() {
+        std::string defaultPath = "/eos/cms/store/group/phys_heavyions/nbarnett/Winter25Prompt25_RunCDEFG.root";
+        loadVetoMap(defaultPath);
+    }
+
+    // Custom constructor
+    JetSelect(const std::string &VetoMapPath){loadVetoMap(VetoMapPath);}
+
+    bool JetSelection(Float_t jteta, Float_t jtphi, Float_t CEF, Float_t NEF, Float_t MUF){
+        bool KeepJet=false;
+        bool KeepJet_map=false;
+        bool KeepJet_id=false;
+        if(TMath::Abs(jteta)<=2.6){if((NEF<0.9)&&(MUF<0.8)&&(CEF<0.8)){KeepJet_id=true;}}
+        if((TMath::Abs(jteta)>2.6)&&(TMath::Abs(jteta)<=2.7)){if((NEF<0.99)&&(MUF<0.8)&&(CEF<0.8)){KeepJet_id=true;}}
+        if((TMath::Abs(jteta)>2.7)&&(TMath::Abs(jteta)<=3.0)){if((NEF<0.99)){KeepJet_id=true;}}
+        if((TMath::Abs(jteta)>3)&&(TMath::Abs(jteta)<=5.0)){if((NEF<0.9)){KeepJet_id=true;}}
+        Double_t vetomapval = hvetomap_->GetBinContent(hvetomap_->FindBin(jteta, jtphi));
+        if(vetomapval==0){KeepJet_map=true;}
+        if((KeepJet_id==true)&&(KeepJet_map==true)){KeepJet=true;}
+        return KeepJet;
+    }
+};
+
+#endif
+
+// How to use:
+// example of checking if jet passes selections for index 0 in an event
+
+// #include "JetSelection_PbPb.h"
+// JetSelect js("/path/to/file/JetVetoMap.root");
+// OR
+// JetSelect js;
+// jet veto maps are regularly uploaded to this GitHub repository: https://github.com/cms-jet/JECDatabase/tree/master/jet_veto_maps
+// latest veto map as of May 24th, 2026 can be quickly grabbed with wget https://github.com/cms-jet/JECDatabase/raw/refs/heads/master/jet_veto_maps/Winter25Prompt25/Winter25Prompt25_RunCDEFG.root 
+
+
+// if(!js.JetSelection(jteta[0], jtphi[0], jtPfCEF[0], jtPfNEF[0],jtPfMUF[0])){continue;}
+// Do your stuff
+#ifndef JETSPECTRAHISTOGRAMS_H
+#define JETSPECTRAHISTOGRAMS_H
+
+#include "TH1F.h"
+#include "TH1I.h"
+#include "TString.h"
+#include "Rtypes.h"
+
+#include <vector>
+#include <cstddef>
+
+#include "Binning.h"
+#include "Utilities.h"
+#include "JetTriggers_2026PbPb_MC.h"
+// #include "JetTriggers_2025PbPb.h"
+
+struct JetSpectraStruct{
+
+    enum MatchType {
+        kNoDR = 0, // no offline-HLT object matching
+        kDR = 1, // offline leading jet matched to HLT object
+        kNMatchTypes = 2
+    };
+
+    static TString MatchSuffix(MatchType matchType) {
+        return matchType == kDR ? "_dR" : "";
+    }
+
+    // event histograms
+    TH1F* vz_unpassed = nullptr;
+    TH1F* vz = nullptr;
+    TH1I* hiBin = nullptr;
+    TH1I* nref = nullptr;
+
+    // event filter histograms
+    TH1I* pclustF = nullptr;
+    TH1I* ppvF = nullptr;
+    TH1I* pphfF = nullptr;
+
+    // leading jet pT histograms
+    // [Eta][hiBin]
+    std::vector<std::vector<TH1F*>> ljtpt;
+    // [Eta][L1][hiBin]
+    std::vector<std::vector<std::vector<TH1F*>>> l1_ljtpt;
+    // [MatchType][Eta][HLT][hiBin]
+    std::vector<std::vector<std::vector<std::vector<TH1F*>>>> hlt_ljtpt;
+
+    JetSpectraStruct(const BinningStruct& bins){
+        InitAxes(bins);
+        InitHistograms(bins);
+    }
+    JetSpectraStruct(const BinningStruct& bins, bool allocate){
+        InitAxes(bins);
+        if(allocate){InitHistograms(bins);}
+    }
+    
+    void InitAxes(const BinningStruct& bins){
+        const std::size_t nEta = bins.etaBins.size();
+        const std::size_t nhiBin = bins.hiBins.size();
+        // [Eta][hiBin]
+        ljtpt.resize(nEta,std::vector<TH1F*>(nhiBin, nullptr));
+        // [Eta][L1][hiBin]
+        l1_ljtpt.resize(nEta,std::vector<std::vector<TH1F*>>(nL1T,std::vector<TH1F*>(nhiBin, nullptr)));
+        // [MatchType][Eta][HLT][hiBin]
+        hlt_ljtpt.resize(kNMatchTypes,std::vector<std::vector<std::vector<TH1F*>>>(nEta,std::vector<std::vector<TH1F*>>(nHLT,std::vector<TH1F*>(nhiBin, nullptr))));
+    }
+
+    void InitHistograms(const BinningStruct& bins) {
+        TString hname;
+ 
+        const std::size_t nEta = bins.etaBins.size();
+        const std::size_t nhiBin = bins.hiBins.size();
+        
+        vz = MakeTH1<TH1F>("hvz", bins.vz);
+        vz_unpassed = MakeTH1<TH1F>("hvz_unpassed", bins.vz);
+        hiBin = MakeTH1<TH1I>("hhiBin", bins.hiBin);
+        nref = MakeTH1<TH1I>("hnref", bins.nref);
+        pclustF = MakeTH1<TH1I>("hpclustF", bins.trig);
+        ppvF = MakeTH1<TH1I>("hppvF", bins.trig);
+        pphfF = MakeTH1<TH1I>("hpphfF", bins.trig);
+
+        
+        for (std::size_t b=0; b<nEta; b++){
+            const auto& etaBin = bins.etaBins[b];
+
+            for (std::size_t hb=0; hb<nhiBin; hb++){
+                const auto& hiBin = bins.hiBins[hb];
+
+                hname = "hjtpt" + etaBin.shortName + hiBin.shortName;
+                ljtpt[b][hb] = MakeTH1<TH1F>(hname, bins.pt);
+
+                for (std::size_t t=0; t<nHLT; t++){
+                    TString hltShort = GetHLTShortName(sHLTrigs[t]);
+
+                    for (int m=0; m<kNMatchTypes; m++){
+                        MatchType matchType = static_cast<MatchType>(m);
+                        hname = "hjtpt" + MatchSuffix(matchType) + etaBin.shortName + hltShort + hiBin.shortName;
+                        hlt_ljtpt[matchType][b][t][hb] = MakeTH1<TH1F>(hname, bins.pt);
+                    }
+                }
+                
+                for (std::size_t t=0; t<nL1T; t++){
+                    TString l1Short = GetL1ShortName(sL1Trigs[t]);
+                    hname = "hjtpt"+ etaBin.shortName+ l1Short+ hiBin.shortName;
+                    l1_ljtpt[b][t][hb] = MakeTH1<TH1F>(hname, bins.pt);
+                }
+            }
+        }
+    }
+
+    void Write(TFile* f) {
+        f->cd();
+        WriteAll(vz_unpassed);
+        WriteAll(vz);
+        WriteAll(hiBin);
+        WriteAll(nref);
+        WriteAll(pclustF);
+        WriteAll(ppvF);
+        WriteAll(pphfF);
+        WriteAll(ljtpt);
+        WriteAll(l1_ljtpt);
+        WriteAll(hlt_ljtpt);
+    }
+};
+
+#endif
+#ifndef JETSTRUCT_H
+#define JETSTRUCT_H
+
+#include "TString.h"
+#include "Rtypes.h"
+
+#include <vector>
+#include <utility>
+
+// declaring event stucture
+template <Int_t MAXNREF>
+struct JetStruct{
+
+    // jet variables //
+    // more than any number of jets in an event in ttrees being processed
+    static constexpr Int_t maxnref = MAXNREF;
+
+    // reco jets
+    struct RecoMomenta{
+        // number in event
+        Int_t nref;
+        // momenta
+        Float_t rawpt[MAXNREF];
+        Float_t pt[MAXNREF];
+        Float_t eta[MAXNREF];
+        Float_t phi[MAXNREF];
+        struct PFInfo{ 
+            // PF fractions
+            Float_t CHF[MAXNREF];
+            Float_t NHF[MAXNREF];
+            Float_t CEF[MAXNREF];
+            Float_t NEF[MAXNREF];
+            Float_t MUF[MAXNREF];
+            // PF multiplicities
+            Int_t CHM[MAXNREF];
+            Int_t NHM[MAXNREF];
+            Int_t CEM[MAXNREF];
+            Int_t NEM[MAXNREF];
+            Int_t MUM[MAXNREF];
+        } pf;
+    } reco;
+
+    // ref jets
+    struct RefMomenta{
+        Float_t pt[MAXNREF];
+        Float_t eta[MAXNREF];
+        Float_t phi[MAXNREF];
+    } ref;
+
+    // gen jets
+    struct GenMomenta{
+        Float_t pt[MAXNREF];
+        Float_t eta[MAXNREF];
+        Float_t phi[MAXNREF];
+    } gen;
+
+    // mapping variables to branches
+    std::vector<std::pair<TString, void*>> BranchMap(bool isMC){
+        std::vector<std::pair<TString, void*>> map = {
+            {"nref", &reco.nref},
+            {"rawpt", reco.rawpt},
+            {"jtpt", reco.pt},
+            {"jteta", reco.eta},
+            {"jtphi", reco.phi},
+            //{"calopt", reco.pt},
+            //{"caloeta", reco.eta},
+            //{"calophi", reco.phi},
+            {"jtPfCHF", reco.pf.CHF},
+            {"jtPfNHF", reco.pf.NHF},
+            {"jtPfCEF", reco.pf.CEF},
+            {"jtPfNEF", reco.pf.NEF},
+            {"jtPfMUF", reco.pf.MUF},
+            {"jtPfCHM", reco.pf.CHM},
+            {"jtPfNHM", reco.pf.NHM},
+            {"jtPfCEM", reco.pf.CEM},
+            {"jtPfNEM", reco.pf.NEM},
+            {"jtPfMUM", reco.pf.MUM},
+        };
+
+        // including gen and ref jet collections iff MC
+        if(isMC){
+            map.insert(map.end(), {
+                {"refpt", ref.pt},
+                {"refeta", ref.eta},
+                {"refphi", ref.phi},
+                {"genpt", gen.pt},
+                {"geneta", gen.eta},
+                {"genphi", gen.phi},
+            });
+        }
+        return map;
+    }
+};
+
+#endif
+#ifndef JETTRIGGERS_2025PBPB_H
+#define JETTRIGGERS_2025PBPB_H
+
+#include "TString.h"
+#include "Rtypes.h"
+
+#include <vector>
+#include <utility>
+#include <array>
+#include <cctype>
+
+// HLT trigger names
+const std::array sHLTrigs = {
+    TString("HLT_HIPuAK4CaloJet40Eta5p1_MinBiasHF1AND_v8"),
+    TString("HLT_HIPuAK4CaloJet60Eta5p1_MinBiasHF1AND_v8"),
+    TString("HLT_HIPuAK4CaloJet80Eta5p1_v16"),
+    TString("HLT_HIPuAK4CaloJet100Eta5p1_v16"),
+    TString("HLT_HIPuAK4CaloJet120Eta5p1_v16")
+};
+
+// L1 trigger names
+const std::array sL1Trigs = {
+    TString("L1_MinimumBiasHF1_AND_BptxAND"),
+    TString("L1_SingleJet60_BptxAND"),
+    TString("L1_SingleJet80_BptxAND")
+};
+
+// automatically derived sizes
+constexpr std::size_t nHLT = sHLTrigs.size();
+constexpr std::size_t nL1T = sL1Trigs.size();
+
+// L1 seed for each HLT
+const std::array<Int_t, nHLT> L1SeedHLT = {0, 0, 1, 1, 2};
+
+// getting the pt threshold of the jet trigger from the trigger name
+inline Float_t GetJetTriggerThreshold(const TString& trig){
+
+    // find "Jet" in HLT name
+    Ssiz_t jetPos = trig.Index("Jet");
+
+    // if not found return invalid value
+    if(jetPos == kNPOS) return -1.0;
+
+    // move to first character after "Jet"
+    jetPos += 3;
+    TString number = "";
+
+    // collect consecutive digits
+    while(jetPos < trig.Length() && isdigit(trig[jetPos])){
+        number += trig[jetPos];
+        jetPos++;
+    }
+    return number.Atof();
+}
+
+inline TString GetHLTShortName(const TString& trig){
+    return Form("_HLT_Jet%.0f", GetJetTriggerThreshold(trig));
+}
+
+inline TString GetL1ShortName(const TString& trig){
+    if(trig.Contains("MinimumBias")){return "_L1_MinBias";}
+    return Form("_L1_Jet%.0f", GetJetTriggerThreshold(trig));
+}
+
+// HLT object tree information
+const TString sHLTObjDir = "hltobject/";
+
+inline TString GetHLTObjTreeName(std::size_t i){
+    return sHLTObjDir + sHLTrigs[i];
+}
+
+// declaring trigger structure
+struct TriggersStruct{
+
+    // trigger decisions
+    Int_t HLT[nHLT]={0};
+    Int_t L1T[nL1T]={0};
+
+    // HLT object variables
+    std::vector<Double_t>* HLT_JetObj_pt[nHLT];
+    std::vector<Double_t>* HLT_JetObj_eta[nHLT];
+    std::vector<Double_t>* HLT_JetObj_phi[nHLT];
+
+    // constructor
+    TriggersStruct(){
+        for(std::size_t i=0; i<nHLT; i++){
+            HLT_JetObj_pt[i]  = nullptr;
+            HLT_JetObj_eta[i] = nullptr;
+            HLT_JetObj_phi[i] = nullptr;
+        }
+    }
+
+    // mapping trigger decisions to branches
+    std::vector<std::pair<TString, void*>> BranchMap(){
+        std::vector<std::pair<TString, void*>> branches;
+        for(std::size_t i=0; i<nHLT; i++){branches.push_back({sHLTrigs[i], &HLT[i]});}
+        for(std::size_t i=0; i<nL1T; i++){branches.push_back({sL1Trigs[i], &L1T[i]});}
+        return branches;
+    }
+
+    // mapping HLT object branches
+    std::vector<std::pair<TString, void*>> HLTObjBranchMap(Int_t iTrig){
+        return{
+            {"pt",  &HLT_JetObj_pt[iTrig]},
+            {"eta", &HLT_JetObj_eta[iTrig]},
+            {"phi", &HLT_JetObj_phi[iTrig]}
+        };
+    }
+};
+
+#endif
+#ifndef JETTRIGGERS_2026PBPB_MC_H
+#define JETTRIGGERS_2026PBPB_MC_H
+
+#include "TString.h"
+#include "Rtypes.h"
+
+#include <vector>
+#include <utility>
+#include <array>
+#include <cctype>
+
+// HLT trigger names
+const std::array sHLTrigs = {
+    TString("HLT_HIPuAK4CaloJet40Eta5p1_MinBiasHF1AND_v9"),
+    TString("HLT_HIPuAK4CaloJet60Eta5p1_MinBiasHF1AND_v9"),
+    TString("HLT_HIPuAK4CaloJet80Eta5p1_v17"),
+    TString("HLT_HIPuAK4CaloJet100Eta5p1_v17"),
+    TString("HLT_HIPuAK4CaloJet120Eta5p1_v17")
+};
+
+// L1 trigger names
+const std::array sL1Trigs = {
+    TString("L1_MinimumBiasHF1_AND_BptxAND"),
+    TString("L1_SingleJet60_BptxAND"),
+    TString("L1_SingleJet80_BptxAND")
+};
+
+// automatically derived sizes
+constexpr std::size_t nHLT = sHLTrigs.size();
+constexpr std::size_t nL1T = sL1Trigs.size();
+
+// L1 seed for each HLT
+const std::array<Int_t, nHLT> L1SeedHLT = {0, 0, 1, 1, 2};
+
+// getting the pt threshold of the jet trigger from the trigger name
+inline Float_t GetJetTriggerThreshold(const TString& trig){
+
+    // find "Jet" in HLT name
+    Ssiz_t jetPos = trig.Index("Jet");
+
+    // if not found return invalid value
+    if(jetPos == kNPOS) return -1.0;
+
+    // move to first character after "Jet"
+    jetPos += 3;
+    TString number = "";
+
+    // collect consecutive digits
+    while(jetPos < trig.Length() && isdigit(trig[jetPos])){
+        number += trig[jetPos];
+        jetPos++;
+    }
+    return number.Atof();
+}
+
+inline TString GetHLTShortName(const TString& trig){
+    return Form("_HLT_Jet%.0f", GetJetTriggerThreshold(trig));
+}
+
+inline TString GetL1ShortName(const TString& trig){
+    if(trig.Contains("MinimumBias")){return "_L1_MinBias";}
+    return Form("_L1_Jet%.0f", GetJetTriggerThreshold(trig));
+}
+
+// HLT object tree information
+const TString sHLTObjDir = "hltobject/";
+
+inline TString GetHLTObjTreeName(std::size_t i){
+    TString trig = sHLTrigs[i];
+    trig.Remove(trig.Last('v') + 1);
+    return sHLTObjDir + trig;
+}
+
+// declaring trigger structure
+struct TriggersStruct{
+
+    // trigger decisions
+    Int_t HLT[nHLT]={0};
+    Int_t L1T[nL1T]={0};
+
+    // HLT object variables
+    std::vector<Double_t>* HLT_JetObj_pt[nHLT];
+    std::vector<Double_t>* HLT_JetObj_eta[nHLT];
+    std::vector<Double_t>* HLT_JetObj_phi[nHLT];
+
+    // constructor
+    TriggersStruct(){
+        for(std::size_t i=0; i<nHLT; i++){
+            HLT_JetObj_pt[i]  = nullptr;
+            HLT_JetObj_eta[i] = nullptr;
+            HLT_JetObj_phi[i] = nullptr;
+        }
+    }
+
+    // mapping trigger decisions to branches
+    std::vector<std::pair<TString, void*>> BranchMap(){
+        std::vector<std::pair<TString, void*>> branches;
+        for(std::size_t i=0; i<nHLT; i++){branches.push_back({sHLTrigs[i], &HLT[i]});}
+        for(std::size_t i=0; i<nL1T; i++){branches.push_back({sL1Trigs[i], &L1T[i]});}
+        return branches;
+    }
+
+    // mapping HLT object branches
+    std::vector<std::pair<TString, void*>> HLTObjBranchMap(Int_t iTrig){
+        return{
+            {"pt",  &HLT_JetObj_pt[iTrig]},
+            {"eta", &HLT_JetObj_eta[iTrig]},
+            {"phi", &HLT_JetObj_phi[iTrig]}
+        };
+    }
+};
+
+#endif
+#include "TColor.h"
+
+// "Sailing Boats Returning to Yabase", Lake Biwa, 1835, Utagawa Hiroshige https://github.com/BlakeRMills/MetBrewer?tab=readme-ov-file#hiroshige
+
+const Color_t HiroshigeLightRed = TColor::GetColor("#e76254");
+const Color_t HiroshigeOrange = TColor::GetColor("#ef8a47");
+const Color_t HiroshigeLightOrange = TColor::GetColor("#f7aa58");
+const Color_t HiroshigeYellow = TColor::GetColor("#ffd06f");
+const Color_t HiroshigeIceBlue = TColor::GetColor("#aadce0");
+const Color_t HiroshigeLightBlue = TColor::GetColor("#72bcd5");
+const Color_t HiroshigeBlue = TColor::GetColor("#528fad");
+const Color_t HiroshigeGrayBlue = TColor::GetColor("#376795");
+const Color_t HiroshigeNightBlue = TColor::GetColor("#1e466e");
+
+// "Mäda Primavesi", 1912, Gustav Klimt https://github.com/BlakeRMills/MetBrewer?tab=readme-ov-file#klimt 
+
+const Color_t KlimtPink = TColor::GetColor("#df9ed4");
+const Color_t KlimtRed = TColor::GetColor("#c93f55");
+const Color_t KlimtYellow = TColor::GetColor("#eacc62");
+const Color_t KlimtGreen = TColor::GetColor("#469d76");
+const Color_t KlimtBlue = TColor::GetColor("#3c4b99");
+const Color_t KlimtPurple = TColor::GetColor("#924099");#ifndef UTILITIES_H
+#define UTILITIES_H
+
+// Utility functions for histogram creation, styling, and plotting
+
+#include "TH1F.h"
+#include "TH1I.h"
+#include "TH1.h"
+#include "THnSparse.h"
+#include "TString.h"
+#include "TCanvas.h"
+#include "TDatime.h"
+#include "TLatex.h"
+#include "TLegend.h"
+#include "TPad.h"
+#include "TString.h"
+#include "TStyle.h"
+#include "TSystem.h"
+
+#include <initializer_list>
+#include <vector>
+
+#include "Binning.h"
+
+// Histograms //
+
+template<typename T>
+void WriteAll(T* h){if(h)h->Write();}
+ 
+template<typename T>
+void WriteAll(std::vector<T>& v){for(auto& entry : v) WriteAll(entry);}
+
+// THnSparse
+
+template<typename T>
+T* MakeTHnSparse(const TString& name, const TString& title, std::initializer_list<AxisBins> axes){
+    const std::vector<AxisBins> axVec(axes);
+    const Int_t ndim = axVec.size();
+    std::vector<Int_t> nbins;
+    std::vector<Double_t> xmin, xmax;
+    for (const auto& ax : axVec) {
+        nbins.push_back(ax.nBins);
+        xmin.push_back(ax.lo);
+        xmax.push_back(ax.hi);
+    }
+    T* h = new T(name, title, ndim, nbins.data(), xmin.data(), xmax.data());
+    for(Int_t i=0; i<ndim; i++){h->GetAxis(i)->SetTitle(axVec[i].title);}
+    return h;
+}
+
+struct SparseRange{
+    Int_t axis;
+    Double_t lo;
+    Double_t hi;
+};
+
+inline void SetAxisRange(THnSparse* h, Int_t axis, Double_t lo, Double_t hi){h->GetAxis(axis)->SetRangeUser(lo, hi);}
+inline void ResetAxisRange(THnSparse* h, Int_t axis){h->GetAxis(axis)->SetRange(0, -1);}
+
+// 1D Projection
+inline TH1D* ProjectTHn1D(THnSparse* h, Int_t axis, const std::vector<SparseRange>& ranges, const TString& newName) {
+    for (const auto& r : ranges) { h->GetAxis(r.axis)->SetRangeUser(r.lo, r.hi - 0.0001); }
+    TH1D* tmp = h->Projection(axis, "E"); 
+    TH1D* out = (TH1D*)tmp->Clone(newName);
+    out->SetTitle("");
+    delete tmp; 
+    for (const auto& r : ranges) { h->GetAxis(r.axis)->SetRange(0, -1); }
+    return out;
+}
+
+// 2D Projection
+inline TH2D* ProjectTHn2D(THnSparse* h, Int_t xAxis, Int_t yAxis, const std::vector<SparseRange>& ranges, const TString& newName) {
+    for (const auto& r : ranges) { h->GetAxis(r.axis)->SetRangeUser(r.lo, r.hi - 0.0001); }
+    TH2D* tmp = h->Projection(yAxis, xAxis, "E"); 
+    TH2D* out = (TH2D*)tmp->Clone(newName);
+    out->SetTitle("");
+    delete tmp; 
+    for (const auto& r : ranges) { h->GetAxis(r.axis)->SetRange(0, -1); }
+    return out;
+}
+
+// TH1
+
+template<typename T>
+T* MakeTH1(const TString& hname, const AxisBins& bins){
+    T* h = new T(hname, hname, bins.nBins, bins.lo, bins.hi);
+    h->SetTitle(bins.title);
+    return h;
+}
+
+inline void NormalizeTH1(TH1* h){
+    const double integral = h->Integral();
+    if(integral > 0.0){h->Scale(1.0 / integral);}
+}
+
+// Plotting //
+
+struct PlotConfig{
+    TString runNumber = "404338";
+    TString globalTag = "";
+    TString jetAlgo   = "";
+    
+    float xmin  = 20.0;
+    float xmax  = 200.0;
+    float ymax = 1.1;
+    float ymin = 0.0;
+
+    int canvasSize = 2400;
+    float imageScaling = 1.0;
+
+    float legfrac = 0.2;
+};
+
+// Canvas
+
+inline TCanvas* MakeSinglePadCanvas(const TString& name, const PlotConfig& cfg, bool grid = false){
+    TCanvas* c = new TCanvas(name, "", cfg.canvasSize, cfg.canvasSize);
+    c->SetTopMargin(0.05);
+    c->SetBottomMargin(0.12);
+    c->SetLeftMargin(0.12);
+    c->SetRightMargin(0.05);
+    c->SetRealAspectRatio();
+    if(grid) {
+        c->SetGridx();
+        c->SetGridy();
+    }
+    return c;
+}
+
+inline TCanvas* MakeColzCanvas(const TString& name, const PlotConfig& cfg){
+    TCanvas* c = new TCanvas(name, "", cfg.canvasSize, cfg.canvasSize);
+    c->SetTopMargin(0.08);
+    c->SetBottomMargin(0.12);
+    c->SetLeftMargin(0.12);
+    c->SetRightMargin(0.15);
+    c->SetRealAspectRatio();
+    return c;
+}
+
+struct SplitCanvas{
+    TCanvas* c = nullptr;
+    TPad* plotpad = nullptr;
+    TPad* legpad = nullptr;
+};
+
+inline SplitCanvas MakeSplitPadCanvas(const TString& name, const PlotConfig& cfg){
+    SplitCanvas sc;
+    sc.c = new TCanvas(name, "", cfg.canvasSize, cfg.canvasSize);
+    sc.c->cd();
+
+    sc.legpad = new TPad(name + "_legpad", "", 0.0, 1.0 - cfg.legfrac, 1.0, 1.0);
+    sc.legpad->SetTopMargin(0.05);
+    sc.legpad->SetBottomMargin(0.0);
+    sc.legpad->SetLeftMargin(0.0);
+    sc.legpad->SetRightMargin(0.0);
+    sc.legpad->SetFillStyle(0);
+    sc.legpad->Draw();
+
+    sc.plotpad = new TPad(name + "_plotpad", "", 0.0, 0.0, 1.0, 1.0 - cfg.legfrac);
+    sc.plotpad->SetTopMargin(0.02);
+    sc.plotpad->SetBottomMargin(0.12);
+    sc.plotpad->SetLeftMargin(0.12);
+    sc.plotpad->SetRightMargin(0.05);
+    sc.plotpad->SetGridx();
+    sc.plotpad->SetGridy();
+    sc.plotpad->Draw();
+
+    return sc;
+}
+
+// Legend
+
+inline TLegend* MakeLegend(float xmin = 0.575, float ymin = 0.75, float xmax = 0.8, float ymax = 0.95){
+    TLegend* l = new TLegend(xmin, ymin, xmax, ymax);
+    l->SetBorderSize(0);
+    l->SetFillStyle(0);
+    l->SetTextSize(0.030);
+    return l;
+}
+
+inline void AddInfoEntries(TLegend* l, const PlotConfig& cfg){
+    if(!cfg.runNumber.IsNull()){l->AddEntry((TObject*)nullptr, cfg.runNumber,  "");}
+    if(!cfg.globalTag.IsNull()){l->AddEntry((TObject*)nullptr, cfg.globalTag,  "");}
+    if(!cfg.jetAlgo.IsNull()){l->AddEntry((TObject*)nullptr, cfg.jetAlgo,    "");}
+}
+
+inline TString MakePlotDir(const TString& prefix = "plots"){
+    TDatime now;
+    TString timestamp = Form("%04d-%02d-%02d_%02d-%02d-%02d", now.GetYear(), now.GetMonth(), now.GetDay(), now.GetHour(), now.GetMinute(), now.GetSecond());
+    TString dir = prefix + "_" + timestamp;
+    gSystem->mkdir(dir, true);
+    return dir;
+}
+
+// Style
+
+inline void SetPlotStyle(const PlotConfig& cfg){
+    gStyle->SetImageScaling(cfg.imageScaling);
+    gStyle->SetOptStat(0);
+    gStyle->SetTitleSize(0.04, "XY");
+    gStyle->SetLabelSize(0.04, "XY");
+    gStyle->SetGridColor(kGray+2);
+    gStyle->SetGridWidth(1);
+    gStyle->SetGridStyle(3);
+    gStyle->SetPalette(kBird);
+}
+
+inline void StyleTH1(TH1* h, Color_t color){
+    h->SetLineColor(color);
+    h->SetMarkerColor(color);
+    h->SetMarkerStyle(20);
+    h->SetMarkerSize(0.8);
+    h->SetLineWidth(4);
+}
+
+// TLatex
+
+inline void DrawLabel(const TString& text, float x, float y, float textSize = 0.035, Int_t align = 11){
+    if(text.IsNull()){return;}
+    TLatex* tex = new TLatex(x, y, text);
+    tex->SetNDC();
+    tex->SetTextAlign(align);
+    tex->SetTextSize(textSize);
+    tex->Draw();
+}
+
+inline void DrawCMSLabel(float x = 0.12, float y = 0.965, float textSize = 0.035) {
+    DrawLabel("CMS #bf{#it{Internal}}", x, y, textSize);
+}
+
+inline void DrawJetAlgoLabel(const TString& jetAlgo, float x = 0.8, float y = 0.04, float textSize = 0.035){
+    DrawLabel(Form("#bf{%s}", jetAlgo.Data()), x, y, textSize);
+}
+
+
+#endif

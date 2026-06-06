@@ -1,0 +1,16 @@
+# ROOT compilation and dictionary artifacts
+*.so
+*.d
+*.pcm
+*.ACLiC*
+
+# Analysis outputs and diagnostic dumps
+*.root
+*.png
+*.pdf
+*__vs__*
+
+# Operating System / IDE files
+.DS_Store
+.vscode/
+.idea/
