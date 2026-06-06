@@ -5,33 +5,27 @@ This repository contains an optimized ROOT framework for processing, monitoring,
 The framework handles multi-dimensional correlation mapping via `THnSparseF` grids to isolate detector inefficiencies, compare different run periods (e.g., assessing the tracking performance with the Forward Pixel detector in vs. out), evaluate data-vs-simulation performance, and extract physics profiles as a function of event centrality.
 
 ---
+
 ## Workflow Architecture & Data Flow
 
-The analysis pipeline processes raw input trees, creates multidimensional sparse histograms, and passes them to localized plotting modules:
+The analysis pipeline processes raw input trees, creates multidimensional sparse histograms, and passes them to localized plotting modules through the following structured sequence:
 
-[1] INPUT DATA STAGE
-└── CMS TTree Files (hiEvtAnalyzer/HiTree, skimanalysis/HltTree, etc.)
-│
-▼
-[2] EXECUTABLE PRODUCTION STAGE
-└── JetHealth_PbPb_lxplus.cpp
-* Applies vertex, trigger, and event filters
-* Enforces jet selection criteria (pT > 10 GeV/c)
-* Fills high-dimensional 'hjetkin' & 'hjetpf' THnSparseF objects
-│
-▼
-[3] PERSISTENCY LAYER
-└── output.root (Contains finalized multidimensional matrices)
-│
-├───► [Plotting Stage A] PlotJetHealthEtaPhiRegion.cpp
-│     └── Generates side-by-side 2D detector occupancy maps (colz)
-│
-└───► [Plotting Stage B] PlotJetFractions.cpp
-└── Generates 3-panel slides showing centrality-dependent
-Particle Flow distributions and data/MC ratios
+* **[1] Input Data Stage**
+  * Reads raw CMS TTree files: `hiEvtAnalyzer/HiTree`, `skimanalysis/HltTree`, `ak4PFJetAnalyzer/t`, and `hltanalysis/HltTree`.
+* **[2] Executable Production Stage (`JetHealth_PbPb_lxplus.cpp`)**
+  * Applies primary vertex constraints (**|v_z| < 15 cm**) and event noise filters (`ppvF`, `pclustF`, `pphfF`).
+  * Enforces Minimum Bias trigger verification and jet selection criteria (**p_T > 10 GeV/c**).
+  * Fills high-dimensional `hjetkin` and `hjetpf` `THnSparseF` matrices.
+* **[3] Persistency Layer (`output.root`)**
+  * Saves finalized multidimensional arrays to disk, serving as the common data source for visualization.
+* **[4] Localized Plotting Modules**
+  * **PlotJetHealthEtaPhiRegion.cpp**: Extracts 2D detector occupancy maps (`colz`) to highlight spatial or geometric run-by-run variations.
+  * **PlotJetFractions.cpp**: Generates 3-panel layout slides showing centrality-dependent Particle Flow energy fractions and their direct data/simulation ratios.
+
+---
 
 ### 1. Data Processing Loop (`JetHealth_PbPb_lxplus.cpp`)
-* **Purpose**: Loops over events inside user-defined input file lists, checks vertex ranges ($|v_z| < 15\text{ cm}$), verifies noise/event filter branches (`ppvF`, `pclustF`, `pphfF`), ensures the Minimum Bias trigger fires, and enforces an analysis-level jet kinematic threshold ($p_T > 10\text{ GeV/c}$).
+* **Purpose**: Loops over events inside user-defined input file lists, checks vertex ranges, verifies noise/event filter branches, ensures the Minimum Bias trigger fires, and enforces an analysis-level jet kinematic threshold.
 * **Outputs**: An organized `output.root` file containing multi-dimensional diagnostic data arrays.
 
 ### 2. Geometric Occupancy Diagnostics (`PlotJetHealthEtaPhiRegion.cpp`)
@@ -50,20 +44,28 @@ This repository has been upgraded from its baseline iteration to transition from
 The key optimization is a multi-dimensional array reconstruction inside `header/JetHealthHistograms.h`. The configuration of the sparse histograms is structured as follows:
 
 * **Kinematic Sparse Histogram (`hjetkin`)**: A 4D sparse array tracking coordinate variables:
-  $$\text{Axes:}\quad [0]\ p_T \quad\longrightarrow\quad [1]\ \eta \quad\longrightarrow\quad [2]\ \phi \quad\longrightarrow\quad [3]\ \text{hiBin (Centrality)}$$
+  * **Axis 0**: $p_T$ (Jet Transverse Momentum)
+  * **Axis 1**: $\eta$ (Pseudorapidity)
+  * **Axis 2**: $\phi$ (Azimuthal Angle)
+  * **Axis 3**: `hiBin` (Collision Centrality)
 * **Particle Flow Fractions Sparse Histogram (`hjetpf`)**: Expanded into an integrated **6D sparse matrix** designed to map jet constituent energy profiles:
-  $$\text{Axes:}\quad [0]\ \text{pfFrac} \quad\longrightarrow\quad [1]\ \text{pfType} \quad\longrightarrow\quad [2]\ \eta \quad\longrightarrow\quad [3]\ \phi \quad\longrightarrow\quad [4]\ p_T \quad\longrightarrow\quad [5]\ \text{hiBin}$$
+  * **Axis 0**: `pfFrac` (Energy Fraction value)
+  * **Axis 1**: `pfType` (Particle ID Enumerator)
+  * **Axis 2**: $\eta$ (Pseudorapidity)
+  * **Axis 3**: $\phi$ (Azimuthal Angle)
+  * **Axis 4**: $p_T$ (Jet Transverse Momentum)
+  * **Axis 5**: `hiBin` (Collision Centrality)
 
 ### 2. Hardcoded PF Index Token Maps
 Particle Flow components are indexed via an internal type enumerator mapped across six dimensional bounds within `FillPF()` loops:
 
 | Enumerator Index (`pfType`) | Acronym Shortname | Descriptive Axis Title |
 | :--- | :--- | :--- |
-| **`0`** | `CHF` | Charged Hadron Fraction |
-| **`1`** | `NHF` | Neutral Hadron Fraction |
-| **`2`** | `CEF` | Charged EM Fraction |
-| **`3`** | `NEF` | Neutral EM Fraction |
-| **`4`** | `MUF` | Muon Fraction |
+| **0** | `CHF` | Charged Hadron Fraction |
+| **1** | `NHF` | Neutral Hadron Fraction |
+| **2** | `CEF` | Charged EM Fraction |
+| **3** | `NEF` | Neutral EM Fraction |
+| **4** | `MUF` | Muon Fraction |
 
 ### 3. Memory-Safe Automated Projection Pipelines
 To abstract complex slicing configurations out of the core plotting scripts, `header/Utilities.h` implements two memory-resilient wrapper functions (`ProjectTHn1D` and `ProjectTHn2D`). 
@@ -83,7 +85,7 @@ Designed to monitor localized performance drops across specific regions of the t
   * Draws normalized metadata layouts displaying `#bf{CMS} #it{Internal}`, the explicit jet algorithmic configuration (`akCs4PF`), kinematic limits ($p_T > \text{Cut}$), and centrality bounds inside the top margins.
 
 ### PlotJetFractions.cpp
-Extacts physics profiles characterizing internal jet composition trends.
+Extracts physics profiles characterizing internal jet composition trends.
 * **Projections & Conversion Pipelines**: 
   1. Filters `hjetpf` by selecting a chosen `pfType` interval on Axis 1, applying a minimum momentum threshold on Axis 4, and choosing a specific centrality range on Axis 5.
   2. Extracts a 2D histogram mapping Particle Flow fraction vs. Pseudorapidity $\eta$ (Axis 0 vs Axis 2).
@@ -101,14 +103,8 @@ Extacts physics profiles characterizing internal jet composition trends.
 
 ### 1. Running the Production Pipeline
 The entry macro accepts configuration inputs natively via the command line or an interactive ROOT session:
+
 ```bash
 # Compilation and execution via shell argument execution:
 # Usage: ./JetHLT <filelist.txt> <output.root> <isMC>
 root -l -b -q 'executable/JetHealth_PbPb_lxplus.cpp+("filelist.txt", "output_Data.root", false)'
-2. Generating Comparative LayoutsExecute the visualization scripts to process local inputs and save generated diagnostics directly to timestamped directories:Bash# Run tracker occupancy comparisons
-root -l executable/PlotJetHealthEtaPhiRegion.cpp
-
-# Run jet fraction profile ratio tracking
-root -l executable/PlotJetFractions.cpp
-
----
