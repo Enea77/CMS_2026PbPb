@@ -5,12 +5,31 @@ This repository contains an optimized ROOT framework for processing, monitoring,
 The framework handles multi-dimensional correlation mapping via `THnSparseF` grids to isolate detector inefficiencies, compare different run periods (e.g., assessing the tracking performance with the Forward Pixel detector in vs. out), evaluate data-vs-simulation performance, and extract physics profiles as a function of event centrality.
 
 ---
-
 ## Workflow Architecture & Data Flow
 
-The analysis is split into a robust **histogram production stage** and two multi-canvas **slide plotting modules**:
+The analysis pipeline processes raw input trees, creates multidimensional sparse histograms, and passes them to localized plotting modules:
 
-┌────────────────────────────────────────────────────────┐│           Input CMS Trees / Data Files                 ││ (hiEvtAnalyzer/HiTree, skimanalysis/HltTree, etc.)     │└───────────────────────────┬────────────────────────────┘│▼ [Executable Stage]┌────────────────────────────────────────────────────────┐│            JetHealth_PbPb_lxplus.cpp                   ││   - Applies vertex, event filter, & jet selections     ││   - Builds 'hjetkin' & 'hjetpf' THnSparseF objects     │└───────────────────────────┬────────────────────────────┘│▼ [Persistency Layer]┌────────────────────────────────────────────────────────┐│                     output.root                        │└───────────────┬────────────────────────┬───────────────┘│                        │▼ [Plotting Stage A]     ▼ [Plotting Stage B]┌──────────────────────────────┐  ┌──────────────────────────────┐│PlotJetHealthEtaPhiRegion.cpp │  │    PlotJetFractions.cpp      ││                              │  │                              ││ Generates side-by-side 2D    │  │ Generates 3-panel slides     ││ detector occupancy grids for │  │ showing Centrality-dependent ││ running comparisons (colz).  │  │ PF distributions & Ratios.   │└──────────────────────────────┘  └──────────────────────────────┘
+[1] INPUT DATA STAGE
+└── CMS TTree Files (hiEvtAnalyzer/HiTree, skimanalysis/HltTree, etc.)
+│
+▼
+[2] EXECUTABLE PRODUCTION STAGE
+└── JetHealth_PbPb_lxplus.cpp
+* Applies vertex, trigger, and event filters
+* Enforces jet selection criteria (pT > 10 GeV/c)
+* Fills high-dimensional 'hjetkin' & 'hjetpf' THnSparseF objects
+│
+▼
+[3] PERSISTENCY LAYER
+└── output.root (Contains finalized multidimensional matrices)
+│
+├───► [Plotting Stage A] PlotJetHealthEtaPhiRegion.cpp
+│     └── Generates side-by-side 2D detector occupancy maps (colz)
+│
+└───► [Plotting Stage B] PlotJetFractions.cpp
+└── Generates 3-panel slides showing centrality-dependent
+Particle Flow distributions and data/MC ratios
+
 ### 1. Data Processing Loop (`JetHealth_PbPb_lxplus.cpp`)
 * **Purpose**: Loops over events inside user-defined input file lists, checks vertex ranges ($|v_z| < 15\text{ cm}$), verifies noise/event filter branches (`ppvF`, `pclustF`, `pphfF`), ensures the Minimum Bias trigger fires, and enforces an analysis-level jet kinematic threshold ($p_T > 10\text{ GeV/c}$).
 * **Outputs**: An organized `output.root` file containing multi-dimensional diagnostic data arrays.
